@@ -140,6 +140,51 @@ async function startServer() {
     });
   });
 
+  // --- Deep/Global Scan ---
+  app.post('/api/ssh/deep-scan', (req, res) => {
+    const { path: scanPath } = req.body;
+    const conn = vpsConnections.get('default')?.client;
+    if (!conn) return res.status(400).json({ error: 'No VPS connected' });
+
+    const scanScript = `
+      echo "--- SCAN START ---"
+      echo "PATH: ${scanPath || '/'}"
+      echo "--- FILES ---"
+      find "${scanPath || '.'}" -maxdepth 2 -not -path '*/.*' | sed 's|^./||'
+      echo "--- PKGS ---"
+      find "${scanPath || '.'}" -maxdepth 2 -name "package.json" -o -name "requirements.txt" -o -name "go.mod"
+      echo "--- END ---"
+    `;
+
+    conn.exec(scanScript, (err, stream) => {
+      if (err) return res.status(500).json({ error: err.message });
+      let out = '';
+      stream.on('close', () => res.json({ report: out }))
+            .on('data', (d) => out += d.toString())
+            .stderr.on('data', (d) => out += d.toString());
+    });
+  });
+
+  app.post('/api/ssh/global-scan', (req, res) => {
+    const conn = vpsConnections.get('default')?.client;
+    if (!conn) return res.status(400).json({ error: 'No VPS connected' });
+
+    const globalScanScript = `
+      echo "--- GLOBAL INTELLIGENCE SCAN ---"
+      echo "Searching for AI Skills/Tools..."
+      find ~ /var/www -name "learned_skills.json" -o -name "*.py" -o -path "*/.gemini/skills/*" 2>/dev/null | grep -v "node_modules" | head -n 50
+      echo "--- END ---"
+    `;
+
+    conn.exec(globalScanScript, (err, stream) => {
+      if (err) return res.status(500).json({ error: err.message });
+      let out = '';
+      stream.on('close', () => res.json({ report: out }))
+            .on('data', (d) => out += d.toString())
+            .stderr.on('data', (d) => out += d.toString());
+    });
+  });
+
   // --- GitHub API ---
   app.post('/api/github/connect', (req, res) => {
     const { token } = req.body;

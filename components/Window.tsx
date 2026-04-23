@@ -52,11 +52,11 @@ export const Window: React.FC<WindowProps> = ({
   onRefreshHealth,
 }) => {
   return (
-    <div className="w-[800px] h-[600px] bg-white border border-gray-300 rounded-xl shadow-2xl flex flex-col relative overflow-hidden font-sans backdrop-blur-sm bg-white/80">
+    <div className="w-full h-[100dvh] sm:w-[800px] sm:h-[600px] bg-white border border-gray-300 sm:rounded-xl shadow-2xl flex flex-col relative overflow-hidden font-sans backdrop-blur-sm bg-white/80">
       {/* Title Bar */}
-      <div className="bg-gray-800/90 text-white py-2 px-4 font-semibold text-base flex justify-between items-center select-none cursor-default rounded-t-xl flex-shrink-0">
-        <div className="flex items-center gap-2">
-           <span className="title-bar-text">{title}</span>
+      <div className="bg-gray-800/90 text-white py-2 px-4 font-semibold text-sm sm:text-base flex justify-between items-center select-none cursor-default sm:rounded-t-xl flex-shrink-0">
+        <div className="flex items-center gap-2 overflow-hidden">
+           <span className="title-bar-text truncate">{title}</span>
            {systemStatus && (
              <div className="flex gap-2 ml-4">
                 <span className={`w-2 h-2 rounded-full ${systemStatus.vps ? 'bg-green-400' : 'bg-red-400'}`} title="VPS Connection"></span>

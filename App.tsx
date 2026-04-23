@@ -201,6 +201,18 @@ const App: React.FC = () => {
                 body: JSON.stringify(skill)
               });
               return res.json();
+            },
+            'tool:vps_deep_scan': async (val) => {
+              const res = await fetch('/api/ssh/deep-scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: val })
+              });
+              return res.json();
+            },
+            'tool:vps_global_scan': async () => {
+              const res = await fetch('/api/ssh/global-scan', { method: 'POST' });
+              return res.json();
             }
           };
 
@@ -210,7 +222,7 @@ const App: React.FC = () => {
             if (interactionData.id === 'tool:vps_connect') {
               toolResult = data.error ? `Error: ${data.error}` : `Connected to VPS: ${data.host}`;
             } else if (interactionData.id === 'tool:vps_exec' || interactionData.id === 'tool:vps_python_run') {
-              toolResult = data.error ? `Error: ${data.error}` : `Output:\n${data.stdout}\n${data.stderr}`;
+              toolResult = data.error ? `Error: ${data.error}` : `---STDOUT---\n${data.stdout || ''}\n---STDERR---\n${data.stderr || ''}`;
             } else if (interactionData.id === 'tool:vps_read') {
               toolResult = data.error ? `Error: ${data.error}` : data.content;
             } else if (interactionData.id === 'tool:vps_write') {
@@ -219,6 +231,8 @@ const App: React.FC = () => {
               toolResult = `Status: ${data.status}\nLast Run: ${data.lastRun}\nLogs:\n${data.logs}`;
             } else if (interactionData.id === 'tool:vps_verify_installer') {
               toolResult = data.error ? `Error: ${data.error}` : `Verification Report:\n${data.report}`;
+            } else if (interactionData.id === 'tool:vps_deep_scan' || interactionData.id === 'tool:vps_global_scan') {
+              toolResult = data.error ? `Error: ${data.error}` : `Scan Result:\n${data.report}`;
             } else {
               toolResult = data.error ? `Error: ${data.error}` : (data.status || 'Success');
             }
@@ -356,7 +370,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="bg-white w-full min-h-screen flex items-center justify-center p-4">
+    <div className="bg-white w-full min-h-screen flex items-center justify-center sm:p-4">
       <Window
         title={windowTitle}
         onClose={handleMasterClose}

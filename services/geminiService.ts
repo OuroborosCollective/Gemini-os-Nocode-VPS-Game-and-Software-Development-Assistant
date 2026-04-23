@@ -7,26 +7,26 @@ import {GoogleGenAI} from '@google/genai';
 import {APP_DEFINITIONS_CONFIG, getSystemPrompt} from '../constants'; // Import getSystemPrompt and APP_DEFINITIONS_CONFIG
 import {InteractionData} from '../types';
 
-if (!process.env.API_KEY) {
+if (!process.env.GEMINI_API_KEY) {
   // This is a critical error. In a real app, you might throw or display a persistent error.
   // For this environment, logging to console is okay, but the app might not function.
   console.error(
-    'API_KEY environment variable is not set. The application will not be able to connect to the Gemini API.',
+    'GEMINI_API_KEY environment variable is not set. The application will not be able to connect to the Gemini API.',
   );
 }
 
-const ai = new GoogleGenAI({apiKey: process.env.API_KEY!}); // The "!" asserts API_KEY is non-null after the check.
+const ai = new GoogleGenAI({apiKey: process.env.GEMINI_API_KEY!}); // The "!" asserts GEMINI_API_KEY is non-null after the check.
 
 export async function* streamAppContent(
   interactionHistory: InteractionData[],
   currentMaxHistoryLength: number,
 ): AsyncGenerator<string, void, void> {
-  const model = 'gemini-3.1-flash-lite-preview';
+  const model = 'gemini-3-flash-preview';
 
-  if (!process.env.API_KEY) {
+  if (!process.env.GEMINI_API_KEY) {
     yield `<div class="p-4 text-red-700 bg-red-100 rounded-lg">
       <p class="font-bold text-lg">Configuration Error</p>
-      <p class="mt-2">The API_KEY is not configured. Please set the API_KEY environment variable.</p>
+      <p class="mt-2">The GEMINI_API_KEY is not configured. Please set the GEMINI_API_KEY environment variable.</p>
     </div>`;
     return;
   }

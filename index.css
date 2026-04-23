@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@layer base {
+  html, body {
+    @apply h-full w-full overflow-hidden;
+    /* Prevent pull-to-refresh on mobile */
+    overscroll-behavior-y: contain;
+  }
+  #root {
+    @apply h-full w-full;
+  }
+}
+
+/* Custom Registry Utilities */
+@layer utilities {
+  .llm-button {
+    @apply bg-blue-600 text-white border-none rounded-md py-2 px-4 m-2 cursor-pointer text-base font-medium text-center transition-colors hover:bg-blue-700 active:bg-blue-800 active:transform active:translate-y-px;
+  }
+  .llm-text {
+    @apply m-2 text-base text-gray-800 leading-relaxed;
+  }
+  .llm-title {
+    @apply font-bold text-xl text-gray-900 mb-3 mt-1 mx-2;
+  }
+  .llm-input,
+  .llm-textarea {
+    @apply m-2 p-2 w-full border border-gray-300 rounded-md bg-white font-sans text-gray-800 text-sm transition-all focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300;
+  }
+  .llm-textarea {
+    @apply min-h-[120px];
+  }
+  .llm-container {
+    @apply w-full flex flex-col items-start mb-4 gap-2 p-2;
+  }
+  .llm-row {
+    @apply w-full flex items-center mb-2 gap-2;
+  }
+  .llm-label {
+    @apply mr-1 text-sm text-gray-600;
+  }
+  .icon {
+    @apply w-24 h-28 flex flex-col items-center justify-start text-center m-2 p-2 cursor-pointer select-none rounded-lg transition-colors hover:bg-blue-100 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500;
+  }
+  .icon-image {
+    @apply text-5xl mb-2 drop-shadow-sm;
+  }
+  .icon-label {
+    @apply text-sm text-gray-800 font-medium break-words max-w-full leading-tight;
+  }
+  .llm-terminal {
+    @apply m-2 p-3 bg-black rounded-md font-mono text-xs overflow-auto max-h-[400px] border border-gray-700 shadow-inner;
+  }
+  .llm-stdout {
+    @apply text-green-400 block mb-1;
+  }
+  .llm-stderr {
+    @apply text-red-400 block mb-1;
+  }
+  .llm-terminal-label {
+    @apply text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1;
+  }
+  .llm-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-2;
+  }
+  .llm-card {
+    @apply bg-white border border-gray-200 rounded-lg p-4 flex flex-col gap-2 shadow-sm transition-all hover:shadow-md hover:border-blue-200;
+  }
+  .llm-pill {
+    @apply px-2 py-1 text-[10px] font-bold uppercase rounded-full inline-block w-fit;
+  }
+}
