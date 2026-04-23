@@ -1,0 +1,375 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+*/
+/* tslint:disable */
+import React, {useCallback, useEffect, useState} from 'react';
+import {GeneratedContent} from './components/GeneratedContent';
+import {Icon} from './components/Icon';
+import {ParametersPanel} from './components/ParametersPanel';
+import {Window} from './components/Window';
+import {APP_DEFINITIONS_CONFIG, INITIAL_MAX_HISTORY_LENGTH} from './constants';
+import {streamAppContent} from './services/geminiService';
+import {AppDefinition, InteractionData} from './types';
+
+const DesktopView: React.FC<{onAppOpen: (app: AppDefinition) => void}> = ({
+  onAppOpen,
+}) => (
+  <div className="flex flex-wrap content-start p-4">
+    {APP_DEFINITIONS_CONFIG.map((app) => (
+      <Icon key={app.id} app={app} onInteract={() => onAppOpen(app)} />
+    ))}
+  </div>
+);
+
+const App: React.FC = () => {
+  const [activeApp, setActiveApp] = useState<AppDefinition | null>(null);
+  const [previousActiveApp, setPreviousActiveApp] =
+    useState<AppDefinition | null>(null);
+  const [llmContent, setLlmContent] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [interactionHistory, setInteractionHistory] = useState<
+    InteractionData[]
+  >([]);
+  const [isParametersOpen, setIsParametersOpen] = useState<boolean>(false);
+  const [currentMaxHistoryLength, setCurrentMaxHistoryLength] =
+    useState<number>(INITIAL_MAX_HISTORY_LENGTH);
+
+  // Statefulness feature state
+  const [isStatefulnessEnabled, setIsStatefulnessEnabled] =
+    useState<boolean>(false);
+  const [appContentCache, setAppContentCache] = useState<
+    Record<string, string>
+  >({});
+  const [currentAppPath, setCurrentAppPath] = useState<string[]>([]); // For UI graph statefulness
+
+  const internalHandleLlmRequest = useCallback(
+    async (historyForLlm: InteractionData[], maxHistoryLength: number) => {
+      if (historyForLlm.length === 0) {
+        setError('No interaction data to process.');
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      let accumulatedContent = '';
+      // Clear llmContent before streaming new content only if not loading from cache
+      // This is now handled before this function is called (in handleAppOpen/handleInteraction)
+      // setLlmContent(''); // Removed from here, set by caller if needed
+
+      try {
+        const stream = streamAppContent(historyForLlm, maxHistoryLength);
+        for await (const chunk of stream) {
+          accumulatedContent += chunk;
+          setLlmContent((prev) => prev + chunk);
+        }
+      } catch (e: any) {
+        setError('Failed to stream content from the API.');
+        console.error(e);
+        accumulatedContent = `<div class="p-4 text-red-600 bg-red-100 rounded-md">Error loading content.</div>`;
+        setLlmContent(accumulatedContent);
+      } finally {
+        setIsLoading(false);
+        // Caching logic is now in useEffect watching llmContent, isLoading, activeApp, currentAppPath etc.
+      }
+    },
+    [],
+  );
+
+  // Effect to cache content when loading finishes and statefulness is enabled
+  useEffect(() => {
+    if (
+      !isLoading &&
+      currentAppPath.length > 0 &&
+      isStatefulnessEnabled &&
+      llmContent
+    ) {
+      const cacheKey = currentAppPath.join('__');
+      setAppContentCache((prevCache) => {
+        if (prevCache[cacheKey] === llmContent) return prevCache;
+        return {
+          ...prevCache,
+          [cacheKey]: llmContent,
+        };
+      });
+    }
+  }, [
+    llmContent,
+    isLoading,
+    currentAppPath,
+    isStatefulnessEnabled
+  ]);
+
+  const handleInteraction = useCallback(
+    async (interactionData: InteractionData) => {
+      if (interactionData.id === 'app_close_button') {
+        handleCloseAppView();
+        return;
+      }
+
+      let toolResult = '';
+      if (interactionData.id.startsWith('tool:')) {
+        setIsLoading(true);
+        try {
+          if (interactionData.id === 'tool:vps_connect') {
+             const res = await fetch('/api/ssh/connect', {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: interactionData.value || '{}'
+             });
+             const data = await res.json();
+             toolResult = data.error ? `Error: ${data.error}` : `Connected to VPS: ${data.host}`;
+          } else if (interactionData.id === 'tool:vps_exec') {
+             const res = await fetch('/api/ssh/exec', {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify({ command: interactionData.value })
+             });
+             const data = await res.json();
+             toolResult = data.error ? `Error: ${data.error}` : `Output:\n${data.stdout}\n${data.stderr}`;
+          } else if (interactionData.id === 'tool:vps_read') {
+             const res = await fetch(`/api/ssh/file?path=${encodeURIComponent(interactionData.value || '')}`);
+             const data = await res.json();
+             toolResult = data.error ? `Error: ${data.error}` : data.content;
+          } else if (interactionData.id === 'tool:vps_write') {
+             try {
+               const { path, content } = JSON.parse(interactionData.value || '{}');
+               const res = await fetch('/api/ssh/file', {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({ path, content })
+               });
+               const data = await res.json();
+               toolResult = data.error ? `Error: ${data.error}` : `File saved: ${path}`;
+             } catch (e) {
+               toolResult = `Error parsing file data: ${interactionData.value}`;
+             }
+          } else if (interactionData.id === 'tool:vps_python_run') {
+             const res = await fetch('/api/ssh/exec', {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify({ command: `python3 -c "${interactionData.value}"` })
+             });
+             const data = await res.json();
+             toolResult = data.error ? `Error: ${data.error}` : `Python Output: ${data.stdout}`;
+          } else if (interactionData.id === 'tool:github_connect') {
+             const res = await fetch('/api/github/connect', {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify({ token: interactionData.value })
+             });
+             const data = await res.json();
+             toolResult = data.error ? `Error: ${data.error}` : 'Connected to GitHub';
+          } else if (interactionData.id === 'tool:vps_install_os') {
+             const res = await fetch('/api/ssh/install-os', {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' }
+             });
+             const data = await res.json();
+             toolResult = data.error ? `Error: ${data.error}` : `Installer Status: ${data.status}\nUse tool:vps_installer_status for details.`;
+          } else if (interactionData.id === 'tool:vps_installer_status') {
+             const res = await fetch('/api/ssh/installer');
+             const data = await res.json();
+             toolResult = `Status: ${data.status}\nLast Run: ${data.lastRun}\nLogs:\n${data.logs}`;
+          } else if (interactionData.id === 'tool:vps_verify_installer') {
+             const res = await fetch('/api/ssh/verify', { method: 'POST' });
+             const data = await res.json();
+             toolResult = data.error ? `Error: ${data.error}` : `Verification Report:\n${data.report}`;
+          } else if (interactionData.id === 'tool:ai_learn_skill') {
+             try {
+               const skill = JSON.parse(interactionData.value || '{}');
+               const res = await fetch('/api/skills', {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify(skill)
+               });
+               const data = await res.json();
+               toolResult = data.error ? `Error: ${data.error}` : `AI Learned Skill: ${skill.name}`;
+             } catch (e) {
+               toolResult = `Error learning skill: ${interactionData.value}`;
+             }
+          }
+        } catch (e: any) {
+          toolResult = `System Error: ${e.message}`;
+        }
+      }
+
+      const updatedInteraction = toolResult 
+        ? { ...interactionData, value: `[TOOL_RESULT]: ${toolResult}` }
+        : interactionData;
+
+      const newHistory = [
+        updatedInteraction,
+        ...interactionHistory.slice(0, currentMaxHistoryLength - 1),
+      ];
+      setInteractionHistory(newHistory);
+
+      const newPath = activeApp
+        ? [...currentAppPath, interactionData.id]
+        : [interactionData.id];
+      setCurrentAppPath(newPath);
+      
+      setLlmContent('');
+      setError(null);
+
+      // Always re-trigger LLM for tools or if not cached
+      internalHandleLlmRequest(newHistory, currentMaxHistoryLength);
+    },
+    [
+      interactionHistory,
+      internalHandleLlmRequest,
+      activeApp,
+      currentMaxHistoryLength,
+      currentAppPath,
+      isStatefulnessEnabled,
+      appContentCache,
+    ],
+  );
+
+  const handleAppOpen = (app: AppDefinition) => {
+    const initialInteraction: InteractionData = {
+      id: app.id,
+      type: 'app_open',
+      elementText: app.name,
+      elementType: 'icon',
+      appContext: app.id,
+    };
+
+    const newHistory = [initialInteraction];
+    setInteractionHistory(newHistory);
+
+    const appPath = [app.id];
+    setCurrentAppPath(appPath);
+    const cacheKey = appPath.join('__');
+
+    if (isParametersOpen) {
+      setIsParametersOpen(false);
+    }
+    setActiveApp(app);
+    setLlmContent('');
+    setError(null);
+
+    if (isStatefulnessEnabled && appContentCache[cacheKey]) {
+      setLlmContent(appContentCache[cacheKey]);
+      setIsLoading(false);
+    } else {
+      internalHandleLlmRequest(newHistory, currentMaxHistoryLength);
+    }
+  };
+
+  const handleCloseAppView = () => {
+    setActiveApp(null);
+    setLlmContent('');
+    setError(null);
+    setInteractionHistory([]);
+    setCurrentAppPath([]);
+    setPreviousActiveApp(null);
+  };
+
+  const handleToggleParametersPanel = () => {
+    setIsParametersOpen((prevIsOpen) => {
+      const nowOpeningParameters = !prevIsOpen;
+      if (nowOpeningParameters) {
+        // Store the currently active app (if any) so it can be restored,
+        // or null if no app is active (desktop view).
+        setPreviousActiveApp(activeApp);
+        setActiveApp(null); // Clear active app to show parameters panel
+        setLlmContent('');
+        setError(null);
+        // Interaction history and current path are not cleared here,
+        // as they might be relevant if the user returns to an app.
+      } else {
+        // Closing parameters panel - always go back to desktop view
+        setPreviousActiveApp(null); // Clear any stored previous app
+        setActiveApp(null); // Ensure desktop view
+        setLlmContent('');
+        setError(null);
+        setInteractionHistory([]); // Clear history when returning to desktop from parameters
+        setCurrentAppPath([]); // Clear app path
+      }
+      return nowOpeningParameters;
+    });
+  };
+
+  const handleUpdateHistoryLength = (newLength: number) => {
+    setCurrentMaxHistoryLength(newLength);
+    // Trim interaction history if new length is shorter
+    setInteractionHistory((prev) => prev.slice(0, newLength));
+  };
+
+  const handleSetStatefulness = (enabled: boolean) => {
+    setIsStatefulnessEnabled(enabled);
+    if (!enabled) {
+      setAppContentCache({});
+    }
+  };
+
+  const windowTitle = isParametersOpen
+    ? 'Gemini Computer'
+    : activeApp
+      ? activeApp.name
+      : 'Gemini Computer';
+  const contentBgColor = '#ffffff';
+
+  const handleMasterClose = () => {
+    if (isParametersOpen) {
+      handleToggleParametersPanel();
+    } else if (activeApp) {
+      handleCloseAppView();
+    }
+  };
+
+  return (
+    <div className="bg-white w-full min-h-screen flex items-center justify-center p-4">
+      <Window
+        title={windowTitle}
+        onClose={handleMasterClose}
+        isAppOpen={!!activeApp && !isParametersOpen}
+        appId={activeApp?.id}
+        onToggleParameters={handleToggleParametersPanel}
+        onExitToDesktop={handleCloseAppView}
+        isParametersPanelOpen={isParametersOpen}>
+        <div
+          className="w-full h-full"
+          style={{backgroundColor: contentBgColor}}>
+          {isParametersOpen ? (
+            <ParametersPanel
+              currentLength={currentMaxHistoryLength}
+              onUpdateHistoryLength={handleUpdateHistoryLength}
+              onClosePanel={handleToggleParametersPanel}
+              isStatefulnessEnabled={isStatefulnessEnabled}
+              onSetStatefulness={handleSetStatefulness}
+            />
+          ) : !activeApp ? (
+            <DesktopView onAppOpen={handleAppOpen} />
+          ) : (
+            <>
+              {isLoading && llmContent.length === 0 && (
+                <div className="flex justify-center items-center h-full">
+                  <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
+                </div>
+              )}
+              {error && (
+                <div className="p-4 text-red-600 bg-red-100 rounded-md">
+                  {error}
+                </div>
+              )}
+              {(!isLoading || llmContent) && (
+                <GeneratedContent
+                  htmlContent={llmContent}
+                  onInteract={handleInteraction}
+                  appContext={activeApp.id}
+                  isLoading={isLoading}
+                />
+              )}
+            </>
+          )}
+        </div>
+      </Window>
+    </div>
+  );
+};
+
+export default App;
