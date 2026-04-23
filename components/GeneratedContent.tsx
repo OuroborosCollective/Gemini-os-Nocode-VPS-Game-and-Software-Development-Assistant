@@ -74,6 +74,18 @@ export const GeneratedContent: React.FC<GeneratedContentProps> = ({
 
     // Process scripts only when loading is complete and content has changed
     if (!isLoading) {
+      // Bridge for LLM-generated code that expects runTool to exist
+      (window as any).runTool = (id: string, value?: string) => {
+        onInteract({
+          id,
+          type: 'generic_click',
+          value,
+          elementType: 'script',
+          elementText: `runTool(${id})`,
+          appContext: appContext
+        });
+      };
+
       if (htmlContent !== processedHtmlContentRef.current) {
         const scripts = Array.from(container.getElementsByTagName('script')) as HTMLScriptElement[];
         scripts.forEach((oldScript) => {
@@ -103,22 +115,10 @@ export const GeneratedContent: React.FC<GeneratedContentProps> = ({
               },
             );
             
-            // Create a visible error message with collapsible details
+            // Create a visible error message without complex inline JS
             const errorDiv = document.createElement('div');
             errorDiv.className = 'p-3 mt-2 text-sm text-red-700 bg-red-100 rounded-lg border border-red-200';
-            errorDiv.innerHTML = `
-              <div class="font-bold flex items-center justify-between cursor-pointer" onclick="this.nextElementSibling.classList.toggle('hidden')">
-                <span>⚠️ Script Execution Error</span>
-                <span class="text-xs opacity-60">Click for details ▾</span>
-              </div>
-              <div class="mt-2 text-xs font-mono bg-red-50 p-2 rounded border border-red-200 overflow-auto hidden">
-                <p class="font-bold border-b border-red-200 pb-1 mb-1">${e.message || 'Unknown Error'}</p>
-                <div class="whitespace-pre-wrap">${e.stack || 'No stack trace available'}</div>
-                <div class="mt-2 pt-2 border-t border-red-200 italic opacity-70">
-                  Script Source Snippet: ${oldScript.innerHTML.substring(0, 100)}...
-                </div>
-              </div>
-            `;
+            errorDiv.innerHTML = '<strong>⚠️ Script Execution Error</strong><br/><small>See console for details</small>';
             oldScript.parentNode?.insertBefore(errorDiv, oldScript.nextSibling);
           }
         });

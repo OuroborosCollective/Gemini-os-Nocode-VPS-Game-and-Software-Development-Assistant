@@ -43,6 +43,25 @@ const App: React.FC = () => {
     Record<string, string>
   >({});
   const [currentAppPath, setCurrentAppPath] = useState<string[]>([]); // For UI graph statefulness
+  const [systemStatus, setSystemStatus] = useState<any>(null);
+
+  // Health check polling
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const res = await fetch('/api/health');
+        if (res.ok) {
+          const data = await res.json();
+          setSystemStatus(data);
+        }
+      } catch (e) {
+        console.warn('Health check failed', e);
+      }
+    };
+    checkHealth();
+    const interval = setInterval(checkHealth, 30000); // Pulse every 30s
+    return () => clearInterval(interval);
+  }, []);
 
   const internalHandleLlmRequest = useCallback(
     async (historyForLlm: InteractionData[], maxHistoryLength: number) => {
@@ -113,83 +132,98 @@ const App: React.FC = () => {
       if (interactionData.id.startsWith('tool:')) {
         setIsLoading(true);
         try {
-          if (interactionData.id === 'tool:vps_connect') {
-             const res = await fetch('/api/ssh/connect', {
-               method: 'POST',
-               headers: { 'Content-Type': 'application/json' },
-               body: interactionData.value || '{}'
-             });
-             const data = await res.json();
-             toolResult = data.error ? `Error: ${data.error}` : `Connected to VPS: ${data.host}`;
-          } else if (interactionData.id === 'tool:vps_exec') {
-             const res = await fetch('/api/ssh/exec', {
-               method: 'POST',
-               headers: { 'Content-Type': 'application/json' },
-               body: JSON.stringify({ command: interactionData.value })
-             });
-             const data = await res.json();
-             toolResult = data.error ? `Error: ${data.error}` : `Output:\n${data.stdout}\n${data.stderr}`;
-          } else if (interactionData.id === 'tool:vps_read') {
-             const res = await fetch(`/api/ssh/file?path=${encodeURIComponent(interactionData.value || '')}`);
-             const data = await res.json();
-             toolResult = data.error ? `Error: ${data.error}` : data.content;
-          } else if (interactionData.id === 'tool:vps_write') {
-             try {
-               const { path, content } = JSON.parse(interactionData.value || '{}');
-               const res = await fetch('/api/ssh/file', {
+          const toolHandlers: Record<string, (val?: string) => Promise<any>> = {
+            'tool:vps_connect': async (val) => {
+              const res = await fetch('/api/ssh/connect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: val || '{}'
+              });
+              return res.json();
+            },
+            'tool:vps_exec': async (val) => {
+              const res = await fetch('/api/ssh/exec', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: val })
+              });
+              return res.json();
+            },
+            'tool:vps_read': async (val) => {
+              const res = await fetch(`/api/ssh/file?path=${encodeURIComponent(val || '')}`);
+              return res.json();
+            },
+            'tool:vps_write': async (val) => {
+              const { path, content } = JSON.parse(val || '{}');
+              const res = await fetch('/api/ssh/file', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path, content })
+              });
+              return res.json();
+            },
+            'tool:vps_python_run': async (val) => {
+              const res = await fetch('/api/ssh/exec', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: `python3 -c "${val}"` })
+              });
+              return res.json();
+            },
+            'tool:github_connect': async (val) => {
+               const res = await fetch('/api/github/connect', {
                  method: 'POST',
                  headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify({ path, content })
+                 body: JSON.stringify({ token: val })
                });
-               const data = await res.json();
-               toolResult = data.error ? `Error: ${data.error}` : `File saved: ${path}`;
-             } catch (e) {
-               toolResult = `Error parsing file data: ${interactionData.value}`;
-             }
-          } else if (interactionData.id === 'tool:vps_python_run') {
-             const res = await fetch('/api/ssh/exec', {
-               method: 'POST',
-               headers: { 'Content-Type': 'application/json' },
-               body: JSON.stringify({ command: `python3 -c "${interactionData.value}"` })
-             });
-             const data = await res.json();
-             toolResult = data.error ? `Error: ${data.error}` : `Python Output: ${data.stdout}`;
-          } else if (interactionData.id === 'tool:github_connect') {
-             const res = await fetch('/api/github/connect', {
-               method: 'POST',
-               headers: { 'Content-Type': 'application/json' },
-               body: JSON.stringify({ token: interactionData.value })
-             });
-             const data = await res.json();
-             toolResult = data.error ? `Error: ${data.error}` : 'Connected to GitHub';
-          } else if (interactionData.id === 'tool:vps_install_os') {
-             const res = await fetch('/api/ssh/install-os', {
-               method: 'POST',
-               headers: { 'Content-Type': 'application/json' }
-             });
-             const data = await res.json();
-             toolResult = data.error ? `Error: ${data.error}` : `Installer Status: ${data.status}\nUse tool:vps_installer_status for details.`;
-          } else if (interactionData.id === 'tool:vps_installer_status') {
-             const res = await fetch('/api/ssh/installer');
-             const data = await res.json();
-             toolResult = `Status: ${data.status}\nLast Run: ${data.lastRun}\nLogs:\n${data.logs}`;
-          } else if (interactionData.id === 'tool:vps_verify_installer') {
-             const res = await fetch('/api/ssh/verify', { method: 'POST' });
-             const data = await res.json();
-             toolResult = data.error ? `Error: ${data.error}` : `Verification Report:\n${data.report}`;
-          } else if (interactionData.id === 'tool:ai_learn_skill') {
-             try {
-               const skill = JSON.parse(interactionData.value || '{}');
-               const res = await fetch('/api/skills', {
+               return res.json();
+            },
+            'tool:vps_install_os': async () => {
+               const res = await fetch('/api/ssh/install-os', {
                  method: 'POST',
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify(skill)
+                 headers: { 'Content-Type': 'application/json' }
                });
-               const data = await res.json();
-               toolResult = data.error ? `Error: ${data.error}` : `AI Learned Skill: ${skill.name}`;
-             } catch (e) {
-               toolResult = `Error learning skill: ${interactionData.value}`;
-             }
+               return res.json();
+            },
+            'tool:vps_installer_status': async () => {
+               const res = await fetch('/api/ssh/installer');
+               return res.json();
+            },
+            'tool:vps_verify_installer': async () => {
+               const res = await fetch('/api/ssh/verify', { method: 'POST' });
+               return res.json();
+            },
+            'tool:ai_learn_skill': async (val) => {
+              const skill = JSON.parse(val || '{}');
+              const res = await fetch('/api/skills', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(skill)
+              });
+              return res.json();
+            }
+          };
+
+          const handler = toolHandlers[interactionData.id];
+          if (handler) {
+            const data = await handler(interactionData.value);
+            if (interactionData.id === 'tool:vps_connect') {
+              toolResult = data.error ? `Error: ${data.error}` : `Connected to VPS: ${data.host}`;
+            } else if (interactionData.id === 'tool:vps_exec' || interactionData.id === 'tool:vps_python_run') {
+              toolResult = data.error ? `Error: ${data.error}` : `Output:\n${data.stdout}\n${data.stderr}`;
+            } else if (interactionData.id === 'tool:vps_read') {
+              toolResult = data.error ? `Error: ${data.error}` : data.content;
+            } else if (interactionData.id === 'tool:vps_write') {
+              toolResult = data.error ? `Error: ${data.error}` : `File saved: ${data.path || 'success'}`;
+            } else if (interactionData.id === 'tool:vps_installer_status') {
+              toolResult = `Status: ${data.status}\nLast Run: ${data.lastRun}\nLogs:\n${data.logs}`;
+            } else if (interactionData.id === 'tool:vps_verify_installer') {
+              toolResult = data.error ? `Error: ${data.error}` : `Verification Report:\n${data.report}`;
+            } else {
+              toolResult = data.error ? `Error: ${data.error}` : (data.status || 'Success');
+            }
+          } else {
+            console.warn(`No handler for tool: ${interactionData.id}`);
           }
         } catch (e: any) {
           toolResult = `System Error: ${e.message}`;
@@ -330,7 +364,8 @@ const App: React.FC = () => {
         appId={activeApp?.id}
         onToggleParameters={handleToggleParametersPanel}
         onExitToDesktop={handleCloseAppView}
-        isParametersPanelOpen={isParametersOpen}>
+        isParametersPanelOpen={isParametersOpen}
+        systemStatus={systemStatus}>
         <div
           className="w-full h-full"
           style={{backgroundColor: contentBgColor}}>
