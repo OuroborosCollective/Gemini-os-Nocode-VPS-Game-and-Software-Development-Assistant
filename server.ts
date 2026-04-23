@@ -16,12 +16,19 @@ async function startServer() {
   app.use(express.json());
 
   const SKILLS_FILE = path.join(__dirname, 'learned_skills.json');
+  const SSH_KEYS_FILE = path.join(__dirname, 'ssh_keys.json');
 
-  // Initialize skills file if not exists
+  // Initialize files if not exists
   try {
     await fs.access(SKILLS_FILE);
   } catch {
     await fs.writeFile(SKILLS_FILE, JSON.stringify([]));
+  }
+
+  try {
+    await fs.access(SSH_KEYS_FILE);
+  } catch {
+    await fs.writeFile(SSH_KEYS_FILE, JSON.stringify([]));
   }
 
   // Store connections and installer state in memory
@@ -51,6 +58,55 @@ async function startServer() {
       privateKey,
       readyTimeout: 15000
     });
+  });
+
+  app.get('/api/ssh/keys', async (req, res) => {
+    try {
+      const data = await fs.readFile(SSH_KEYS_FILE, 'utf-8');
+      res.json(JSON.parse(data));
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to read keys' });
+    }
+  });
+
+  app.post('/api/ssh/keys', async (req, res) => {
+    try {
+      const { name, key } = req.body;
+      const data = await fs.readFile(SSH_KEYS_FILE, 'utf-8');
+      const keys = JSON.parse(data);
+      const newKey = { id: Date.now().toString(), name, key, isDefault: keys.length === 0 };
+      keys.push(newKey);
+      await fs.writeFile(SSH_KEYS_FILE, JSON.stringify(keys, null, 2));
+      res.json(newKey);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to save key' });
+    }
+  });
+
+  app.delete('/api/ssh/keys/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const data = await fs.readFile(SSH_KEYS_FILE, 'utf-8');
+      let keys = JSON.parse(data);
+      keys = keys.filter((k: any) => k.id !== id);
+      await fs.writeFile(SSH_KEYS_FILE, JSON.stringify(keys, null, 2));
+      res.json({ status: 'deleted' });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to delete key' });
+    }
+  });
+
+  app.post('/api/ssh/keys/default', async (req, res) => {
+    try {
+      const { id } = req.body;
+      const data = await fs.readFile(SSH_KEYS_FILE, 'utf-8');
+      let keys = JSON.parse(data);
+      keys = keys.map((k: any) => ({ ...k, isDefault: k.id === id }));
+      await fs.writeFile(SSH_KEYS_FILE, JSON.stringify(keys, null, 2));
+      res.json({ status: 'updated' });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to update default key' });
+    }
   });
 
   app.post('/api/ssh/exec', (req, res) => {

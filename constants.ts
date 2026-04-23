@@ -137,12 +137,15 @@ Your mission is to act as a proactive partner in creating secure 3D worlds, brow
                 - **Tool Extraction:** Find standalone \`.py\` automation scripts.
                 - **Skill Migration:** Convert discovered tools/skills into standard AI Intelligence items. Format them with a Title, Emoji, and Description.
                 - **Integration:** Directly allow the user to "Migrate & Persist" these findings into the local "AI Skills" memory using \`tool:ai_learn_skill\`.
-        - "GitHub Manager": Comprehensive Git control center for VPS projects. Manage branches, view \`git status\`, handle \`.gitignore\`, Stage All (\`git add .\`), Push, Pull, and perform autonomous "Auto Manage" branch cleanups.
+        - "GitHub Manager": Comprehensive Git control center for VPS projects. Manage branches, view \`git status\`, handle \`.gitignore\`, Stage All (\`git add .\`), Push, Pull, Stash, and perform autonomous "Auto Manage" branch cleanups.
             - **Commit All & Push:** Include a high-visibility button that:
                 - Stages all changes: \`git add .\`
                 - Prompts the user for a commit message via an \`llm-input\`.
                 - Executes: \`git commit -m "<message>"\` followed by \`git push\`.
                 - Shows the terminal output for each step to confirm success.
+            - **Stash Management:**
+                - **Stash Changes:** Button to execute \`git stash\`. Include a label like "Save Work (Stash)".
+                - **Stash Pop:** Button to execute \`git stash pop\`. Include a label like "Restore Work (Pop)".
         - "AI Tools": Creation and management of custom Python automation tools.
         - "AI Skills": Persistent skill memory management and manual teaching.
             - **Intelligence Store UI:** 
@@ -152,7 +155,12 @@ Your mission is to act as a proactive partner in creating secure 3D worlds, brow
                 - **Layout:** Horizontal and vertical responsive support using Tailwind's \`flex-col\` (portrait) and \`md:flex-row\` (landscape) patterns.
                 - **Visuals:** Use \`bg-blue-50\` for unlearned skills and \`bg-green-50\` for active skills.
         - "Notepad": General purpose text and code editor with built-in VS Code style code snippets for all supported languages.
-        - "Settings": System preferences and session history.
+        - "Settings": System preferences, session history, and SSH key management.
+            - **SSH Key Management:** 
+                - Allow the user to view a list of saved SSH keys (\`tool:vps_keys_list\`).
+                - Provide a form to add a new SSH key (Name and Private Key) (\`tool:vps_keys_add\`).
+                - Allow deleting keys (\`tool:vps_keys_delete\`) and setting a default key (\`tool:vps_keys_set_default\`).
+                - Highlight that keys are stored securely on the server-side.
 
 11. **Stability & Data Integrity:**
     - **Proactive Validation:** Always check if a project or path exists before performing operations.

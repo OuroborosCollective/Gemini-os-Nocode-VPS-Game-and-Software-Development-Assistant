@@ -94,7 +94,11 @@ export const GeneratedContent: React.FC<GeneratedContentProps> = ({
             Array.from(oldScript.attributes).forEach((attr) =>
               newScript.setAttribute(attr.name, attr.value),
             );
-            newScript.text = oldScript.innerHTML;
+            
+            const scriptText = (oldScript.innerHTML || '').trim();
+            if (!scriptText && !newScript.src) return;
+
+            newScript.text = scriptText;
 
             if (oldScript.parentNode) {
               oldScript.parentNode.replaceChild(newScript, oldScript);

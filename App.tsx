@@ -213,30 +213,58 @@ const App: React.FC = () => {
             'tool:vps_global_scan': async () => {
               const res = await fetch('/api/ssh/global-scan', { method: 'POST' });
               return res.json();
+            },
+            'tool:vps_keys_list': async () => {
+              const res = await fetch('/api/ssh/keys');
+              return res.json();
+            },
+            'tool:vps_keys_add': async (val) => {
+              const { name, key } = JSON.parse(val || '{}');
+              const res = await fetch('/api/ssh/keys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, key })
+              });
+              return res.json();
+            },
+            'tool:vps_keys_delete': async (val) => {
+              const res = await fetch(`/api/ssh/keys/${val}`, { method: 'DELETE' });
+              return res.json();
+            },
+            'tool:vps_keys_set_default': async (val) => {
+              const res = await fetch('/api/ssh/keys/default', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: val })
+              });
+              return res.json();
             }
           };
 
           const handler = toolHandlers[interactionData.id];
           if (handler) {
-            const data = await handler(interactionData.value);
+            const data = await handler(interactionData.value) || {};
             if (interactionData.id === 'tool:vps_connect') {
-              toolResult = data.error ? `Error: ${data.error}` : `Connected to VPS: ${data.host}`;
+              toolResult = data.error ? `Error: ${data.error}` : `Connected to VPS: ${data.host || 'success'}`;
             } else if (interactionData.id === 'tool:vps_exec' || interactionData.id === 'tool:vps_python_run') {
               toolResult = data.error ? `Error: ${data.error}` : `---STDOUT---\n${data.stdout || ''}\n---STDERR---\n${data.stderr || ''}`;
             } else if (interactionData.id === 'tool:vps_read') {
-              toolResult = data.error ? `Error: ${data.error}` : data.content;
+              toolResult = data.error ? `Error: ${data.error}` : (data.content || '');
             } else if (interactionData.id === 'tool:vps_write') {
               toolResult = data.error ? `Error: ${data.error}` : `File saved: ${data.path || 'success'}`;
             } else if (interactionData.id === 'tool:vps_installer_status') {
-              toolResult = `Status: ${data.status}\nLast Run: ${data.lastRun}\nLogs:\n${data.logs}`;
+              toolResult = `Status: ${data.status || 'unknown'}\nLast Run: ${data.lastRun || 'never'}\nLogs:\n${data.logs || ''}`;
             } else if (interactionData.id === 'tool:vps_verify_installer') {
-              toolResult = data.error ? `Error: ${data.error}` : `Verification Report:\n${data.report}`;
+              toolResult = data.error ? `Error: ${data.error}` : `Verification Report:\n${data.report || ''}`;
             } else if (interactionData.id === 'tool:vps_deep_scan' || interactionData.id === 'tool:vps_global_scan') {
-              toolResult = data.error ? `Error: ${data.error}` : `Scan Result:\n${data.report}`;
+              toolResult = data.error ? `Error: ${data.error}` : `Scan Result:\n${data.report || ''}`;
+            } else if (interactionData.id === 'tool:vps_keys_list') {
+              toolResult = data.error ? `Error: ${data.error}` : JSON.stringify(data);
             } else {
               toolResult = data.error ? `Error: ${data.error}` : (data.status || 'Success');
             }
-          } else {
+          }
+ else {
             console.warn(`No handler for tool: ${interactionData.id}`);
           }
         } catch (e: any) {
