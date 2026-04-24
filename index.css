@@ -48,16 +48,25 @@
     @apply text-sm text-gray-800 font-medium break-words max-w-full leading-tight;
   }
   .llm-terminal {
-    @apply m-2 p-3 bg-black rounded-md font-mono text-xs overflow-auto max-h-[400px] border border-gray-700 shadow-inner;
+    @apply m-2 p-0 bg-[#0c0c0c] rounded-lg font-mono text-xs overflow-hidden border border-gray-800 shadow-2xl;
+  }
+  .llm-terminal-header {
+    @apply flex items-center gap-2 px-3 py-2 bg-[#1e1e1e] border-b border-gray-800;
+  }
+  .llm-terminal-dot {
+    @apply w-2.5 h-2.5 rounded-full;
+  }
+  .llm-terminal-body {
+    @apply p-4 overflow-auto max-h-[400px];
   }
   .llm-stdout {
-    @apply text-green-400 block mb-1;
+    @apply text-green-400 block mb-2 whitespace-pre-wrap;
   }
   .llm-stderr {
-    @apply text-red-400 block mb-1;
+    @apply text-rose-400 block mb-2 whitespace-pre-wrap italic;
   }
   .llm-terminal-label {
-    @apply text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1;
+    @apply text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2 flex items-center gap-1 opacity-80;
   }
   .llm-grid {
     @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-2;

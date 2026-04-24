@@ -3,11 +3,9 @@ import { createServer as createViteServer } from 'vite';
 import { Client } from 'ssh2';
 import { Octokit } from 'octokit';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = process.cwd();
 
 async function startServer() {
   const app = express();

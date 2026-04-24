@@ -75,11 +75,14 @@ export const GeneratedContent: React.FC<GeneratedContentProps> = ({
     // Process scripts only when loading is complete and content has changed
     if (!isLoading) {
       // Bridge for LLM-generated code that expects runTool to exist
-      (window as any).runTool = (id: string, value?: string) => {
+      (window as any).runTool = (id: string, value?: any) => {
+        const stringifiedValue = typeof value === 'object' && value !== null 
+          ? JSON.stringify(value) 
+          : value;
         onInteract({
           id,
           type: 'generic_click',
-          value,
+          value: stringifiedValue,
           elementType: 'script',
           elementText: `runTool(${id})`,
           appContext: appContext

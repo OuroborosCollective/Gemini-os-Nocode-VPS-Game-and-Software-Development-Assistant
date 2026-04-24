@@ -132,6 +132,11 @@ const App: React.FC = () => {
       if (interactionData.id.startsWith('tool:')) {
         setIsLoading(true);
         try {
+          const safeParse = (val: any) => {
+            if (typeof val === 'object' && val !== null) return val;
+            try { return JSON.parse(val || '{}'); } catch (e) { return {}; }
+          };
+
           const toolHandlers: Record<string, (val?: string) => Promise<any>> = {
             'tool:vps_connect': async (val) => {
               const res = await fetch('/api/ssh/connect', {
@@ -154,7 +159,7 @@ const App: React.FC = () => {
               return res.json();
             },
             'tool:vps_write': async (val) => {
-              const { path, content } = JSON.parse(val || '{}');
+              const { path, content } = safeParse(val);
               const res = await fetch('/api/ssh/file', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -194,7 +199,7 @@ const App: React.FC = () => {
                return res.json();
             },
             'tool:ai_learn_skill': async (val) => {
-              const skill = JSON.parse(val || '{}');
+              const skill = safeParse(val);
               const res = await fetch('/api/skills', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -219,7 +224,7 @@ const App: React.FC = () => {
               return res.json();
             },
             'tool:vps_keys_add': async (val) => {
-              const { name, key } = JSON.parse(val || '{}');
+              const { name, key } = safeParse(val);
               const res = await fetch('/api/ssh/keys', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -247,7 +252,7 @@ const App: React.FC = () => {
             if (interactionData.id === 'tool:vps_connect') {
               toolResult = data.error ? `Error: ${data.error}` : `Connected to VPS: ${data.host || 'success'}`;
             } else if (interactionData.id === 'tool:vps_exec' || interactionData.id === 'tool:vps_python_run') {
-              toolResult = data.error ? `Error: ${data.error}` : `---STDOUT---\n${data.stdout || ''}\n---STDERR---\n${data.stderr || ''}`;
+              toolResult = data.error ? `Error: ${data.error}` : `EXEC_RESULT:\n---STDOUT---\n${data.stdout || ''}\n---STDERR---\n${data.stderr || ''}`;
             } else if (interactionData.id === 'tool:vps_read') {
               toolResult = data.error ? `Error: ${data.error}` : (data.content || '');
             } else if (interactionData.id === 'tool:vps_write') {
@@ -259,7 +264,7 @@ const App: React.FC = () => {
             } else if (interactionData.id === 'tool:vps_deep_scan' || interactionData.id === 'tool:vps_global_scan') {
               toolResult = data.error ? `Error: ${data.error}` : `Scan Result:\n${data.report || ''}`;
             } else if (interactionData.id === 'tool:vps_keys_list') {
-              toolResult = data.error ? `Error: ${data.error}` : JSON.stringify(data);
+              toolResult = data.error ? `Error: ${data.error}` : `SSH_KEYS_DATA: ${JSON.stringify(data)}`;
             } else {
               toolResult = data.error ? `Error: ${data.error}` : (data.status || 'Success');
             }
