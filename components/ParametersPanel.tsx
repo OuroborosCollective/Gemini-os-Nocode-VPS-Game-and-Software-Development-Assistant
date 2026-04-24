@@ -1,9 +1,9 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
-*/
+ */
 /* tslint:disable */
-import React, {useEffect, useState} from 'react';
+import React, { useEffect, useState } from "react";
 
 interface ParametersPanelProps {
   currentLength: number;
@@ -53,7 +53,7 @@ export const ParametersPanel: React.FC<ParametersPanelProps> = ({
     if (!isNaN(newLength) && newLength >= 0 && newLength <= 10) {
       onUpdateHistoryLength(newLength);
     } else {
-      alert('Please enter a number between 0 and 10 for history length.');
+      alert("Please enter a number between 0 and 10 for history length.");
       setLocalHistoryLengthInput(currentLength.toString()); // Revert local input to original prop on error
       return; // Do not proceed to close if there's an error
     }
@@ -81,7 +81,8 @@ export const ParametersPanel: React.FC<ParametersPanelProps> = ({
           <label
             htmlFor="maxHistoryLengthInput"
             className="llm-label whitespace-nowrap mr-3 flex-shrink-0"
-            style={{minWidth: '150px'}}>
+            style={{ minWidth: "150px" }}
+          >
             Max History Length:
           </label>
           <input
@@ -103,7 +104,8 @@ export const ParametersPanel: React.FC<ParametersPanelProps> = ({
           <label
             htmlFor="statefulnessCheckbox"
             className="llm-label whitespace-nowrap mr-3 flex-shrink-0"
-            style={{minWidth: '150px'}}>
+            style={{ minWidth: "150px" }}
+          >
             Enable Statefulness:
           </label>
           <input
@@ -119,18 +121,20 @@ export const ParametersPanel: React.FC<ParametersPanelProps> = ({
 
       {/* Action Buttons */}
       <div className="mt-6 w-full max-w-md flex justify-start gap-3">
-        {' '}
+        {" "}
         {/* Changed pt-2 to mt-6, justify-end to justify-start */}
         <button
           onClick={handleApplyParameters}
           className="llm-button"
-          aria-label="Apply all parameter settings and close">
+          aria-label="Apply all parameter settings and close"
+        >
           Apply Parameters
         </button>
         <button
           onClick={handleClose}
           className="llm-button bg-gray-500 hover:bg-gray-600 active:bg-gray-700"
-          aria-label="Close parameters panel without applying current changes">
+          aria-label="Close parameters panel without applying current changes"
+        >
           Close Parameters
         </button>
       </div>

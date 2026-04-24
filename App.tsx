@@ -1,18 +1,21 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
-*/
+ */
 /* tslint:disable */
-import React, {useCallback, useEffect, useState} from 'react';
-import {GeneratedContent} from './components/GeneratedContent';
-import {Icon} from './components/Icon';
-import {ParametersPanel} from './components/ParametersPanel';
-import {Window} from './components/Window';
-import {APP_DEFINITIONS_CONFIG, INITIAL_MAX_HISTORY_LENGTH} from './constants';
-import {streamAppContent} from './services/geminiService';
-import {AppDefinition, InteractionData} from './types';
+import React, { useCallback, useEffect, useState } from "react";
+import { GeneratedContent } from "./components/GeneratedContent";
+import { Icon } from "./components/Icon";
+import { ParametersPanel } from "./components/ParametersPanel";
+import { Window } from "./components/Window";
+import {
+  APP_DEFINITIONS_CONFIG,
+  INITIAL_MAX_HISTORY_LENGTH,
+} from "./constants";
+import { streamAppContent } from "./services/geminiService";
+import { AppDefinition, InteractionData } from "./types";
 
-const DesktopView: React.FC<{onAppOpen: (app: AppDefinition) => void}> = ({
+const DesktopView: React.FC<{ onAppOpen: (app: AppDefinition) => void }> = ({
   onAppOpen,
 }) => (
   <div className="flex flex-wrap content-start p-4">
@@ -26,7 +29,7 @@ const App: React.FC = () => {
   const [activeApp, setActiveApp] = useState<AppDefinition | null>(null);
   const [previousActiveApp, setPreviousActiveApp] =
     useState<AppDefinition | null>(null);
-  const [llmContent, setLlmContent] = useState<string>('');
+  const [llmContent, setLlmContent] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [interactionHistory, setInteractionHistory] = useState<
@@ -49,13 +52,13 @@ const App: React.FC = () => {
   useEffect(() => {
     const checkHealth = async () => {
       try {
-        const res = await fetch('/api/health');
+        const res = await fetch("/api/health");
         if (res.ok) {
           const data = await res.json();
           setSystemStatus(data);
         }
       } catch (e) {
-        console.warn('Health check failed', e);
+        console.warn("Health check failed", e);
       }
     };
     checkHealth();
@@ -66,14 +69,14 @@ const App: React.FC = () => {
   const internalHandleLlmRequest = useCallback(
     async (historyForLlm: InteractionData[], maxHistoryLength: number) => {
       if (historyForLlm.length === 0) {
-        setError('No interaction data to process.');
+        setError("No interaction data to process.");
         return;
       }
 
       setIsLoading(true);
       setError(null);
 
-      let accumulatedContent = '';
+      let accumulatedContent = "";
       // Clear llmContent before streaming new content only if not loading from cache
       // This is now handled before this function is called (in handleAppOpen/handleInteraction)
       // setLlmContent(''); // Removed from here, set by caller if needed
@@ -85,7 +88,7 @@ const App: React.FC = () => {
           setLlmContent((prev) => prev + chunk);
         }
       } catch (e: any) {
-        setError('Failed to stream content from the API.');
+        setError("Failed to stream content from the API.");
         console.error(e);
         accumulatedContent = `<div class="p-4 text-red-600 bg-red-100 rounded-md">Error loading content.</div>`;
         setLlmContent(accumulatedContent);
@@ -105,7 +108,7 @@ const App: React.FC = () => {
       isStatefulnessEnabled &&
       llmContent
     ) {
-      const cacheKey = currentAppPath.join('__');
+      const cacheKey = currentAppPath.join("__");
       setAppContentCache((prevCache) => {
         if (prevCache[cacheKey] === llmContent) return prevCache;
         return {
@@ -114,162 +117,302 @@ const App: React.FC = () => {
         };
       });
     }
-  }, [
-    llmContent,
-    isLoading,
-    currentAppPath,
-    isStatefulnessEnabled
-  ]);
+  }, [llmContent, isLoading, currentAppPath, isStatefulnessEnabled]);
 
   const handleInteraction = useCallback(
     async (interactionData: InteractionData) => {
-      if (interactionData.id === 'app_close_button') {
+      if (interactionData.id === "app_close_button") {
         handleCloseAppView();
         return;
       }
 
-      let toolResult = '';
-      if (interactionData.id.startsWith('tool:')) {
+      let toolResult = "";
+      if (interactionData.id.startsWith("tool:")) {
         setIsLoading(true);
         try {
           const safeParse = (val: any) => {
-            if (typeof val === 'object' && val !== null) return val;
-            try { return JSON.parse(val || '{}'); } catch (e) { return {}; }
+            if (typeof val === "object" && val !== null) return val;
+            try {
+              return JSON.parse(val || "{}");
+            } catch (e) {
+              return {};
+            }
           };
 
           const toolHandlers: Record<string, (val?: string) => Promise<any>> = {
-            'tool:vps_connect': async (val) => {
-              const res = await fetch('/api/ssh/connect', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: val || '{}'
+            "tool:vps_save_path": async (val) => {
+              const res = await fetch("/api/ssh/save-path", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: val }),
               });
               return res.json();
             },
-            'tool:vps_exec': async (val) => {
-              const res = await fetch('/api/ssh/exec', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ command: val })
+            "tool:vps_connect": async (val) => {
+              const res = await fetch("/api/ssh/connect", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: val || "{}",
               });
               return res.json();
             },
-            'tool:vps_read': async (val) => {
-              const res = await fetch(`/api/ssh/file?path=${encodeURIComponent(val || '')}`);
+            "tool:vps_exec": async (val) => {
+              const res = await fetch("/api/ssh/exec", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ command: val }),
+              });
               return res.json();
             },
-            'tool:vps_write': async (val) => {
+            "tool:vps_read": async (val) => {
+              const parsed = safeParse(val);
+              const pathArg =
+                typeof parsed === "object" && parsed !== null && parsed.path
+                  ? parsed.path
+                  : val;
+              const base64Arg =
+                typeof parsed === "object" && parsed !== null && parsed.base64
+                  ? "&base64=true"
+                  : "";
+              const res = await fetch(
+                "/api/ssh/file?path=" +
+                  encodeURIComponent(String(pathArg || "")) +
+                  base64Arg,
+              );
+              return res.json();
+            },
+            "tool:vps_ls": async (val) => {
+              const res = await fetch(
+                "/api/ssh/ls?path=" + encodeURIComponent(val || "."),
+              );
+              return res.json();
+            },
+            "tool:vps_file_action": async (val) => {
+              const res = await fetch("/api/ssh/file/action", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: val || "{}",
+              });
+              return res.json();
+            },
+            "tool:vps_write": async (val) => {
               const { path, content } = safeParse(val);
-              const res = await fetch('/api/ssh/file', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path, content })
+              const res = await fetch("/api/ssh/file", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path, content }),
               });
               return res.json();
             },
-            'tool:vps_python_run': async (val) => {
-              const res = await fetch('/api/ssh/exec', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ command: `python3 -c "${val}"` })
+            "tool:vps_python_run": async (val) => {
+              const res = await fetch("/api/ssh/exec", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ command: "python3 -c " + JSON.stringify(val || "") }),
               });
               return res.json();
             },
-            'tool:github_connect': async (val) => {
-               const res = await fetch('/api/github/connect', {
-                 method: 'POST',
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify({ token: val })
-               });
-               return res.json();
+            "tool:github_connect": async (val) => {
+              const res = await fetch("/api/github/connect", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token: val }),
+              });
+              return res.json();
             },
-            'tool:vps_install_os': async () => {
-               const res = await fetch('/api/ssh/install-os', {
-                 method: 'POST',
-                 headers: { 'Content-Type': 'application/json' }
-               });
-               return res.json();
+            "tool:vps_discovered_paths": async () => {
+              const res = await fetch("/api/ssh/discovered-paths");
+              return res.json();
             },
-            'tool:vps_installer_status': async () => {
-               const res = await fetch('/api/ssh/installer');
-               return res.json();
+            "tool:vps_install_os": async () => {
+              const res = await fetch("/api/ssh/install-os", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+              });
+              return res.json();
             },
-            'tool:vps_verify_installer': async () => {
-               const res = await fetch('/api/ssh/verify', { method: 'POST' });
-               return res.json();
+            "tool:vps_installer_status": async () => {
+              const res = await fetch("/api/ssh/installer");
+              return res.json();
             },
-            'tool:ai_learn_skill': async (val) => {
+            "tool:vps_verify_installer": async () => {
+              const res = await fetch("/api/ssh/verify", { method: "POST" });
+              return res.json();
+            },
+            "tool:ai_learn_skill": async (val) => {
               const skill = safeParse(val);
-              const res = await fetch('/api/skills', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(skill)
+              const res = await fetch("/api/skills", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(skill),
               });
               return res.json();
             },
-            'tool:vps_deep_scan': async (val) => {
-              const res = await fetch('/api/ssh/deep-scan', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: val })
+            "tool:vps_deep_scan": async (val) => {
+              const res = await fetch("/api/ssh/deep-scan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: val }),
               });
               return res.json();
             },
-            'tool:vps_global_scan': async () => {
-              const res = await fetch('/api/ssh/global-scan', { method: 'POST' });
+            "tool:vps_global_scan": async () => {
+              const res = await fetch("/api/ssh/global-scan", {
+                method: "POST",
+              });
               return res.json();
             },
-            'tool:vps_keys_list': async () => {
-              const res = await fetch('/api/ssh/keys');
+            "tool:vps_scan_status": async () => {
+              const res = await fetch("/api/ssh/scan-status");
               return res.json();
             },
-            'tool:vps_keys_add': async (val) => {
+            "tool:vps_migrate_skills": async (val) => {
+              const res = await fetch("/api/vps/migrate-skills", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filePath: val }),
+              });
+              return res.json();
+            },
+            "tool:vps_keys_list": async () => {
+              const res = await fetch("/api/ssh/keys");
+              return res.json();
+            },
+            "tool:vps_keys_add": async (val) => {
               const { name, key } = safeParse(val);
-              const res = await fetch('/api/ssh/keys', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, key })
+              const res = await fetch("/api/ssh/keys", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name, key }),
               });
               return res.json();
             },
-            'tool:vps_keys_delete': async (val) => {
-              const res = await fetch(`/api/ssh/keys/${val}`, { method: 'DELETE' });
-              return res.json();
-            },
-            'tool:vps_keys_set_default': async (val) => {
-              const res = await fetch('/api/ssh/keys/default', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: val })
+            "tool:vps_keys_delete": async (val) => {
+              const res = await fetch(`/api/ssh/keys/${val}`, {
+                method: "DELETE",
               });
               return res.json();
-            }
+            },
+            "tool:vps_keys_set_default": async (val) => {
+              const res = await fetch("/api/ssh/keys/default", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: val }),
+              });
+              return res.json();
+            },
           };
 
           const handler = toolHandlers[interactionData.id];
           if (handler) {
-            const data = await handler(interactionData.value) || {};
+            const data = (await handler(interactionData.value)) || {};
             if (interactionData.id === 'tool:vps_connect') {
-              toolResult = data.error ? `Error: ${data.error}` : `Connected to VPS: ${data.host || 'success'}`;
-            } else if (interactionData.id === 'tool:vps_exec' || interactionData.id === 'tool:vps_python_run') {
-              toolResult = data.error ? `Error: ${data.error}` : `EXEC_RESULT:\n---STDOUT---\n${data.stdout || ''}\n---STDERR---\n${data.stderr || ''}`;
+              toolResult = data.error
+                ? 'Error: ' + data.error
+                : 'Connected to VPS: ' + (data.host || 'success');
+            } else if (
+              interactionData.id === 'tool:vps_exec' ||
+              interactionData.id === 'tool:vps_python_run'
+            ) {
+              toolResult = data.error
+                ? 'Error: ' + data.error
+                : 'EXEC_RESULT:\n---STDOUT---\n' +
+                  (data.stdout || '') +
+                  '\n---STDERR---\n' +
+                  (data.stderr || '');
             } else if (interactionData.id === 'tool:vps_read') {
-              toolResult = data.error ? `Error: ${data.error}` : (data.content || '');
+              if (data.isBase64) {
+                toolResult = 'FILE_CONTENT_BASE64:' + data.content;
+              } else {
+                toolResult = data.error ? 'Error: ' + data.error : data.content || '';
+              }
+            } else if (interactionData.id === 'tool:vps_ls') {
+              toolResult = data.error
+                ? 'Error: ' + data.error
+                : 'DIRECTORY_LISTING:' + JSON.stringify(data);
+            } else if (interactionData.id === 'tool:vps_file_action') {
+              toolResult = data.error
+                ? 'Error: ' + data.error
+                : 'ACTION_RESULT: ' + data.status;
             } else if (interactionData.id === 'tool:vps_write') {
-              toolResult = data.error ? `Error: ${data.error}` : `File saved: ${data.path || 'success'}`;
+              toolResult = data.error
+                ? 'Error: ' + data.error
+                : 'File saved: ' + (data.path || 'success');
             } else if (interactionData.id === 'tool:vps_installer_status') {
-              toolResult = `Status: ${data.status || 'unknown'}\nLast Run: ${data.lastRun || 'never'}\nLogs:\n${data.logs || ''}`;
+              toolResult =
+                'Status: ' +
+                (data.status || 'unknown') +
+                '\nLast Run: ' +
+                (data.lastRun || 'never') +
+                '\nLogs:\n' +
+                (data.logs || '');
             } else if (interactionData.id === 'tool:vps_verify_installer') {
-              toolResult = data.error ? `Error: ${data.error}` : `Verification Report:\n${data.report || ''}`;
-            } else if (interactionData.id === 'tool:vps_deep_scan' || interactionData.id === 'tool:vps_global_scan') {
-              toolResult = data.error ? `Error: ${data.error}` : `Scan Result:\n${data.report || ''}`;
+              toolResult = data.error
+                ? 'Error: ' + data.error
+                : 'Verification Report:\n' + (data.report || '');
+            } else if (
+              interactionData.id === 'tool:vps_deep_scan' ||
+              interactionData.id === 'tool:vps_global_scan'
+            ) {
+              toolResult = data.error
+                ? 'Error: ' + data.error
+                : 'SCAN_TRIGGERED: status=' + (data.status || 'started');
+            } else if (interactionData.id === 'tool:vps_scan_status') {
+              // Extract meaningful inventory data for the AI to render badges
+              const projects = data.report
+                ? data.report
+                    .split('=== PROJECT:')
+                    .slice(1)
+                    .map((p: string) => {
+                      const lines = p.split('\n');
+                      return {
+                        path: lines[0].trim(),
+                        files: p
+                          .match(
+                            /\[File Breakdown\]\n([\s\S]+?)\n\[Detected Entry Points\]/,
+                          )?.[1]
+                          .trim(),
+                        entry: p
+                          .match(
+                            /\[Detected Entry Points\]\n([\s\S]+?)\n\[Dependency Overview\]/,
+                          )?.[1]
+                          .trim(),
+                      };
+                    })
+                : [];
+              toolResult =
+                'SCAN_STATUS: state=' +
+                data.status +
+                ' progress=' +
+                data.progress +
+                '% logs="' +
+                data.logs +
+                '" projects=' +
+                JSON.stringify(projects) +
+                ' skillsFound=' +
+                JSON.stringify(data.skillsFound || []) +
+                ' discoveredPaths=' +
+                JSON.stringify(data.discoveredPaths || []);
+            } else if (interactionData.id === 'tool:vps_discovered_paths') {
+              toolResult = 'DISCOVERED_PATHS: ' + JSON.stringify(data);
+            } else if (interactionData.id === 'tool:vps_migrate_skills') {
+              toolResult = data.error
+                ? 'Error: ' + data.error
+                : 'MIGRATION_RESULT: ' + JSON.stringify(data);
+            } else if (interactionData.id === 'tool:vps_save_path') {
+              toolResult = data.error
+                ? 'Error: ' + data.error
+                : 'Path saved to system: ' + (data.path || 'success');
             } else if (interactionData.id === 'tool:vps_keys_list') {
-              toolResult = data.error ? `Error: ${data.error}` : `SSH_KEYS_DATA: ${JSON.stringify(data)}`;
+              toolResult = data.error
+                ? 'Error: ' + data.error
+                : 'SSH_KEYS_DATA: ' + JSON.stringify(data);
             } else {
-              toolResult = data.error ? `Error: ${data.error}` : (data.status || 'Success');
+              toolResult = data.error
+                ? 'Error: ' + data.error
+                : data.status || 'Success';
             }
-          }
- else {
+          } else {
             console.warn(`No handler for tool: ${interactionData.id}`);
           }
         } catch (e: any) {
@@ -277,8 +420,8 @@ const App: React.FC = () => {
         }
       }
 
-      const updatedInteraction = toolResult 
-        ? { ...interactionData, value: `[TOOL_RESULT]: ${toolResult}` }
+      const updatedInteraction = toolResult
+        ? {...interactionData, value: '[TOOL_RESULT]: ' + toolResult}
         : interactionData;
 
       const newHistory = [
@@ -291,8 +434,8 @@ const App: React.FC = () => {
         ? [...currentAppPath, interactionData.id]
         : [interactionData.id];
       setCurrentAppPath(newPath);
-      
-      setLlmContent('');
+
+      setLlmContent("");
       setError(null);
 
       // Always re-trigger LLM for tools or if not cached
@@ -312,9 +455,9 @@ const App: React.FC = () => {
   const handleAppOpen = (app: AppDefinition) => {
     const initialInteraction: InteractionData = {
       id: app.id,
-      type: 'app_open',
+      type: "app_open",
       elementText: app.name,
-      elementType: 'icon',
+      elementType: "icon",
       appContext: app.id,
     };
 
@@ -323,13 +466,13 @@ const App: React.FC = () => {
 
     const appPath = [app.id];
     setCurrentAppPath(appPath);
-    const cacheKey = appPath.join('__');
+    const cacheKey = appPath.join("__");
 
     if (isParametersOpen) {
       setIsParametersOpen(false);
     }
     setActiveApp(app);
-    setLlmContent('');
+    setLlmContent("");
     setError(null);
 
     if (isStatefulnessEnabled && appContentCache[cacheKey]) {
@@ -342,7 +485,7 @@ const App: React.FC = () => {
 
   const handleCloseAppView = () => {
     setActiveApp(null);
-    setLlmContent('');
+    setLlmContent("");
     setError(null);
     setInteractionHistory([]);
     setCurrentAppPath([]);
@@ -357,18 +500,42 @@ const App: React.FC = () => {
         // or null if no app is active (desktop view).
         setPreviousActiveApp(activeApp);
         setActiveApp(null); // Clear active app to show parameters panel
-        setLlmContent('');
+        setLlmContent("");
         setError(null);
         // Interaction history and current path are not cleared here,
         // as they might be relevant if the user returns to an app.
       } else {
-        // Closing parameters panel - always go back to desktop view
-        setPreviousActiveApp(null); // Clear any stored previous app
-        setActiveApp(null); // Ensure desktop view
-        setLlmContent('');
+        // Closing parameters panel - try to restore previous app
+        if (previousActiveApp) {
+          setActiveApp(previousActiveApp);
+          setPreviousActiveApp(null);
+          // The effect in handleAppOpen handles re-request or cache
+          // But here we need to manually trigger because we're bypassing handleAppOpen
+          const appPath = [previousActiveApp.id];
+          setCurrentAppPath(appPath);
+          const cacheKey = appPath.join("__");
+          if (isStatefulnessEnabled && appContentCache[cacheKey]) {
+            setLlmContent(appContentCache[cacheKey]);
+          } else {
+            // Re-trigger if no cache
+            const initialInteraction: InteractionData = {
+              id: previousActiveApp.id,
+              type: "app_open",
+              elementText: previousActiveApp.name,
+              elementType: "icon",
+              appContext: previousActiveApp.id,
+            };
+            const newHistory = [initialInteraction];
+            setInteractionHistory(newHistory);
+            internalHandleLlmRequest(newHistory, currentMaxHistoryLength);
+          }
+        } else {
+          setActiveApp(null);
+          setLlmContent("");
+          setInteractionHistory([]);
+          setCurrentAppPath([]);
+        }
         setError(null);
-        setInteractionHistory([]); // Clear history when returning to desktop from parameters
-        setCurrentAppPath([]); // Clear app path
       }
       return nowOpeningParameters;
     });
@@ -388,11 +555,23 @@ const App: React.FC = () => {
   };
 
   const windowTitle = isParametersOpen
-    ? 'Gemini Computer'
+    ? "Gemini Computer"
     : activeApp
       ? activeApp.name
-      : 'Gemini Computer';
-  const contentBgColor = '#ffffff';
+      : "Gemini Computer";
+  const contentBgColor = "#ffffff";
+
+  const handleRefreshHealth = async () => {
+    try {
+      const res = await fetch("/api/health");
+      if (res.ok) {
+        const data = await res.json();
+        setSystemStatus(data);
+      }
+    } catch (e) {
+      console.warn("Health check failed", e);
+    }
+  };
 
   const handleMasterClose = () => {
     if (isParametersOpen) {
@@ -412,10 +591,13 @@ const App: React.FC = () => {
         onToggleParameters={handleToggleParametersPanel}
         onExitToDesktop={handleCloseAppView}
         isParametersPanelOpen={isParametersOpen}
-        systemStatus={systemStatus}>
+        systemStatus={systemStatus}
+        onRefreshHealth={handleRefreshHealth}
+      >
         <div
           className="w-full h-full"
-          style={{backgroundColor: contentBgColor}}>
+          style={{ backgroundColor: contentBgColor }}
+        >
           {isParametersOpen ? (
             <ParametersPanel
               currentLength={currentMaxHistoryLength}
