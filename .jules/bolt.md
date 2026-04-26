@@ -1,0 +1,3 @@
+## 2025-05-15 - Throttled Streaming and Hook Stability
+**Learning:** In LLM-powered applications, streaming content can trigger a "rendering storm" if React state is updated on every single token/chunk. This is compounded if `useEffect` hooks in the rendering component depend directly on the streaming content, causing them to tear down and rebuild hundreds of times per second. Additionally, `smooth` scrolling during rapid updates causes significant animation jank.
+**Action:** Always batch/throttle state updates during streaming (e.g., ~64ms interval). Ensure component effects are decoupled from high-frequency props like `htmlContent`. Use `auto` scrolling instead of `smooth` during active streaming for better CPU efficiency and smoother UX.

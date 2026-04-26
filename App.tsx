@@ -83,10 +83,18 @@ const App: React.FC = () => {
 
       try {
         const stream = streamAppContent(historyForLlm, maxHistoryLength);
+        let lastUpdateTime = Date.now();
+        const THROTTLE_MS = 64; // Batch updates to reduce re-renders (~15fps during stream)
+
         for await (const chunk of stream) {
           accumulatedContent += chunk;
-          setLlmContent((prev) => prev + chunk);
+          const now = Date.now();
+          if (now - lastUpdateTime > THROTTLE_MS) {
+            setLlmContent(accumulatedContent);
+            lastUpdateTime = now;
+          }
         }
+        setLlmContent(accumulatedContent); // Final sync
       } catch (e: any) {
         setError("Failed to stream content from the API.");
         console.error(e);
