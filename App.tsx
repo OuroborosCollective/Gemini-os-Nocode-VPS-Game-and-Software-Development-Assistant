@@ -591,6 +591,7 @@ const App: React.FC = () => {
         onToggleParameters={handleToggleParametersPanel}
         onExitToDesktop={handleCloseAppView}
         isParametersPanelOpen={isParametersOpen}
+        isLoading={isLoading}
         systemStatus={systemStatus}
         onRefreshHealth={handleRefreshHealth}
       >
