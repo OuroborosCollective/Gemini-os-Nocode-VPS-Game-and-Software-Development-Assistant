@@ -573,13 +573,24 @@ const App: React.FC = () => {
     }
   };
 
-  const handleMasterClose = () => {
+  const handleMasterClose = useCallback(() => {
     if (isParametersOpen) {
       handleToggleParametersPanel();
     } else if (activeApp) {
       handleCloseAppView();
     }
-  };
+  }, [isParametersOpen, handleToggleParametersPanel, handleCloseAppView, activeApp]);
+
+  // Global Escape key listener
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        handleMasterClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleMasterClose]);
 
   return (
     <div className="bg-white w-full min-h-screen flex items-center justify-center sm:p-4">
