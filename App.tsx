@@ -86,10 +86,16 @@ const App: React.FC = () => {
 
       try {
         const stream = streamAppContent(historyForLlm, maxHistoryLength);
+        let lastUpdateTime = Date.now();
         for await (const chunk of stream) {
           accumulatedContent += chunk;
-          setLlmContent((prev) => prev + chunk);
+          const now = Date.now();
+          if (now - lastUpdateTime > 64) {
+            setLlmContent(accumulatedContent);
+            lastUpdateTime = now;
+          }
         }
+        setLlmContent(accumulatedContent); // Ensure final state is set
       } catch (e: any) {
         setError("Failed to stream content from the API.");
         console.error(e);
@@ -120,7 +126,7 @@ const App: React.FC = () => {
         };
       });
     }
-  }, [llmContent, isLoading, currentAppPath, isStatefulnessEnabled]);
+  }, [isLoading, currentAppPath, isStatefulnessEnabled]);
 
   const handleInteraction = useCallback(
     async (interactionData: InteractionData) => {
