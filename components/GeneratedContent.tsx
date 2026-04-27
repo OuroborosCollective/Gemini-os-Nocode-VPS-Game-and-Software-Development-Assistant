@@ -26,11 +26,16 @@ export const GeneratedContent: React.FC<GeneratedContentProps> = ({
     progress: number;
     logs: string;
     report: string;
+    projects: { path: string; deps: Record<string, string> }[];
   } | null>(null);
 
   const renderedHtml = React.useMemo(() => {
     if (scanState?.status === "completed") {
-      return `<div class="llm-terminal"><div class="llm-terminal-body"><div class="llm-stdout">${scanState.report}</div></div></div>`;
+      const escapedReport = scanState.report
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      return `<div class="llm-terminal"><div class="llm-terminal-body"><div class="llm-stdout">${escapedReport}</div></div></div>`;
     }
     return htmlContent;
   }, [htmlContent, scanState?.status, scanState?.report]);
@@ -114,63 +119,60 @@ export const GeneratedContent: React.FC<GeneratedContentProps> = ({
     // Process scripts only when loading is complete and content has changed
     if (!isLoading) {
       // Bridge for LLM-generated code that expects runTool to exist
-      (window as any).runTool = (id: string, value?: any) => {
-        const stringifiedValue =
-          typeof value === "object" && value !== null
-            ? JSON.stringify(value)
-            : value;
-        onInteract({
-          id,
-          type: "generic_click",
-          value: stringifiedValue,
-          elementType: "script",
-          elementText: "runTool(" + id + ")",
-          appContext: appContext,
-        });
-      };
+      if (!(window as any).runTool) {
+        (window as any).runTool = (id: string, value?: any) => {
+          const stringifiedValue =
+            typeof value === "object" && value !== null
+              ? JSON.stringify(value)
+              : value;
+          onInteract({
+            id,
+            type: "generic_click",
+            value: stringifiedValue,
+            elementType: "script",
+            elementText: "runTool(" + id + ")",
+            appContext: appContext,
+          });
+        };
+      }
 
       if (htmlContent !== processedHtmlContentRef.current) {
         const scripts = Array.from(
           container.getElementsByTagName("script"),
         ) as HTMLScriptElement[];
         scripts.forEach((oldScript) => {
+          // Skip if already processed in this render cycle
+          if (oldScript.getAttribute('data-processed') === 'true') return;
+          
           try {
             const newScript = document.createElement("script");
             Array.from(oldScript.attributes).forEach((attr) =>
               newScript.setAttribute(attr.name, attr.value),
             );
+            newScript.setAttribute('data-processed', 'true');
 
-            const scriptText = (oldScript.innerHTML || "").trim();
-            if (!scriptText && !newScript.src) return;
-
-            newScript.text = scriptText;
+            // Use textContent or text for script content
+            const scriptText = (oldScript.textContent || oldScript.innerHTML || "").trim();
+            if (scriptText) {
+                newScript.text = scriptText;
+            }
 
             if (oldScript.parentNode) {
               oldScript.parentNode.replaceChild(newScript, oldScript);
-            } else {
-              console.warn(
-                "Script tag found without a parent node:",
-                oldScript,
-              );
             }
           } catch (e: any) {
-            console.error("Error processing/executing script tag.", {
-              scriptContent:
-                oldScript.innerHTML.substring(0, 500) +
-                (oldScript.innerHTML.length > 500 ? "..." : ""),
-              error: e,
-            });
-
-            // Create a visible error message without complex inline JS
-            const errorDiv = document.createElement("div");
-            errorDiv.className =
-              "p-3 mt-2 text-sm text-red-700 bg-red-100 rounded-lg border border-red-200";
-            errorDiv.innerHTML =
-              "<strong>Script Execution Error</strong><br/><small>See console for details</small>";
-            oldScript.parentNode?.insertBefore(errorDiv, oldScript.nextSibling);
+            console.error("Error executing script tag.", e);
+            oldScript.setAttribute('data-processed', 'error');
+            
+            if (!oldScript.parentNode?.querySelector('.script-error')) {
+                const errorDiv = document.createElement("div");
+                errorDiv.className = "p-3 mt-2 text-sm text-red-700 bg-red-100 rounded-lg border border-red-200 script-error";
+                errorDiv.innerHTML = "<strong>Script Error</strong>";
+                oldScript.parentNode?.insertBefore(errorDiv, oldScript.nextSibling);
+            }
           }
         });
-        processedHtmlContentRef.current = htmlContent; // Mark this content as processed
+        processedHtmlContentRef.current = htmlContent;
       }
     } else {
       // If loading, reset the processed content ref. This ensures that when loading finishes,
@@ -204,7 +206,7 @@ export const GeneratedContent: React.FC<GeneratedContentProps> = ({
     <div className="relative w-full h-full overflow-hidden flex flex-col">
       <div
         ref={contentRef}
-        className={`w-full h-full overflow-y-auto ${scanState?.status === "scanning" ? "opacity-20 pointer-events-none" : "opacity-100"}`}
+        className={`w-full h-full overflow-y-auto html-content-renderer ${scanState?.status === "scanning" ? "opacity-20 pointer-events-none" : "opacity-100"}`}
         dangerouslySetInnerHTML={{ __html: renderedHtml }}
       />
 
@@ -233,6 +235,20 @@ export const GeneratedContent: React.FC<GeneratedContentProps> = ({
                 </span>
                 <span className="w-1 h-3 bg-blue-500 ml-1 animate-pulse"></span>
               </div>
+
+              {scanState.projects && scanState.projects.length > 0 && (
+                <div className="bg-black/50 border border-gray-800 rounded p-2 font-mono text-[10px] max-h-32 overflow-y-auto">
+                  <div className="text-gray-500 uppercase mb-1 font-bold">Detected Projects:</div>
+                  {scanState.projects.map((proj, i) => (
+                    <div key={i} className="mb-2">
+                      <div className="text-blue-400 truncate">{proj.path}</div>
+                      <div className="text-gray-600 ml-2">
+                        {Object.keys(proj.deps || {}).length} deps
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="space-y-1">
                 <div className="flex justify-between text-[9px] font-bold tracking-tighter">

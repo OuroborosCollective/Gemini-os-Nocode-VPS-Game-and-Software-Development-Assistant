@@ -15,6 +15,7 @@ async function startServer() {
   const dataDir = process.env.NODE_ENV === "production" ? "/tmp" : __dirname;
   const SKILLS_FILE = path.join(dataDir, "learned_skills.json");
   const SSH_KEYS_FILE = path.join(dataDir, "ssh_keys.json");
+  const VPS_CONNECTIONS_FILE = path.join(dataDir, "vps_connections.json");
   const DISCOVERED_PATHS_FILE = path.join(dataDir, "discovered_paths.json");
 
   // Initialize files if not exists
@@ -35,6 +36,7 @@ async function startServer() {
 
   await initFile(SKILLS_FILE, []);
   await initFile(SSH_KEYS_FILE, []);
+  await initFile(VPS_CONNECTIONS_FILE, []);
   await initFile(DISCOVERED_PATHS_FILE, []);
 
   // Store connections and installer state in memory
@@ -56,6 +58,37 @@ async function startServer() {
     discoveredPaths: [] as string[],
   };
 
+  // --- VPS Connections API ---
+  app.get("/api/vps/connections", async (req, res) => {
+    try {
+      const data = await fs.readFile(VPS_CONNECTIONS_FILE, "utf-8");
+      res.json(JSON.parse(data));
+    } catch (err) {
+      res.status(500).json({ error: "Failed to read connections" });
+    }
+  });
+
+  app.post("/api/vps/connections", async (req, res) => {
+    try {
+      const { host, port, username, keyName, password } = req.body;
+      const data = await fs.readFile(VPS_CONNECTIONS_FILE, "utf-8");
+      const connections = JSON.parse(data);
+      const newConn = {
+        id: Date.now().toString(),
+        host,
+        port,
+        username,
+        keyName,
+        password: password ? !!password : undefined, // Don't store plain text password
+      };
+      connections.push(newConn);
+      await fs.writeFile(VPS_CONNECTIONS_FILE, JSON.stringify(connections, null, 2));
+      res.json(newConn);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to save connection" });
+    }
+  });
+
   // --- SSH API ---
   app.get("/api/ssh/installer", (req, res) => {
     res.json(installerState);
@@ -67,6 +100,12 @@ async function startServer() {
 
   app.post("/api/ssh/connect", (req, res) => {
     const { host, port, username, password, privateKey } = req.body;
+    console.log(`Connecting to ${host}:${port} as ${username}`);
+    
+    if (!host || !username || (!password && !privateKey)) {
+      return res.status(400).json({ error: "Missing required connection fields: host, username, and password or privateKey" });
+    }
+
     const conn = new Client();
 
     conn
@@ -78,6 +117,7 @@ async function startServer() {
         res.json({ status: "connected", host });
       })
       .on("error", (err) => {
+        console.error("SSH Connection Error:", err);
         res.status(500).json({ error: err.message });
       })
       .connect({
@@ -172,6 +212,11 @@ async function startServer() {
           errorOut += data.toString();
         });
     });
+  });
+
+  app.post("/api/ssh/check", (req, res) => {
+    const conn = vpsConnections.get("default")?.client;
+    res.json({ connected: !!conn });
   });
 
   app.post("/api/ssh/verify", (req, res) => {
@@ -325,7 +370,9 @@ async function startServer() {
       echo "##PROGRESS:15##"
       
       # Find potential project roots
-      PROJECTS=$(find "${targetPath}" -maxdepth 10 \( -name "package.json" -o -name "requirements.txt" -o -name "go.mod" -o -name "pom.xml" -o -name "index.html" -o -name "project.json" -o -name ".git" -o -name "*.tmp" \) -printf '%h\n' 2>/dev/null | grep -v "node_modules" | sort -u | head -n 200)
+      echo "DEBUG: Scanning path ${targetPath} for project roots..."
+      PROJECTS=$(find "${targetPath}" -maxdepth 10 \( -name "package.json" -o -name "requirements.txt" -o -name "go.mod" -o -name "pom.xml" -o -name "index.html" -o -name "project.json" -o -name ".git" -o -name "*.tmp" \) -printf '%h\n' 2>&1 | grep -v "node_modules" | sort -u | head -n 200)
+      echo "DEBUG: Found projects: $PROJECTS"
       echo "##PROGRESS:30##"
 
       # Also find skills in this specific path
@@ -341,6 +388,20 @@ async function startServer() {
           CURRENT_PROJ=$((CURRENT_PROJ + 1))
           P=$((30 + (60 * CURRENT_PROJ / PROJ_COUNT)))
           echo "##PROGRESS:$P##"
+          
+          # Extract dependencies
+          DEPS='{}'
+          if [ -f "$proj/package.json" ]; then
+            DEPS=$(cat "$proj/package.json" | python3 -c 'import sys, json; print(json.dumps(json.load(sys.stdin).get("dependencies", {})))')
+          elif [ -f "$proj/requirements.txt" ]; then
+            DEPS=$(cat "$proj/requirements.txt" | python3 -c 'import sys; print(json.dumps([line.strip() for line in sys.stdin if line.strip() and not line.startswith("#")]))')
+          elif [ -f "$proj/go.mod" ]; then
+            # Simple go.mod parsing
+            DEPS=$(grep "^require " "$proj/go.mod" | awk '{print $2, $3}' | python3 -c 'import sys, json; print(json.dumps(dict(line.split() for line in sys.stdin if line.strip())))')
+          fi
+
+          echo "##PROJECT_DATA:{\"path\":\"$proj\", \"deps\":$DEPS}##"
+          
           echo "Scanning: $proj"
           echo "=== PROJECT: $proj ==="
           
@@ -350,19 +411,6 @@ async function startServer() {
           echo "[Detected Entry Points]"
           find "$proj" -maxdepth 2 \( -name "server.js" -o -name "app.js" -o -name "main.py" -o -name "app.py" -o -name "index.js" -o -name "main.go" -o -name "index.html" -o -name "main.tsx" -o -name "App.tsx" -o -name "index.ts" -o -name "server.ts" \) 2>/dev/null
           
-          echo "[Dependency Overview]"
-          if [ -f "$proj/package.json" ]; then
-            echo "Node.js Deps:"
-            grep -E '"(dependencies)"' -A 15 "$proj/package.json" | grep ":" | sed 's/[",]//g' | head -n 10
-          fi
-          if [ -f "$proj/requirements.txt" ]; then
-            echo "Python Deps:"
-            head -n 10 "$proj/requirements.txt"
-          fi
-          if [ -f "$proj/go.mod" ]; then
-            echo "Go Modules:"
-            grep "require" "$proj/go.mod" -A 5 | head -n 6
-          fi
           echo "-----------------------"
         done
       fi
@@ -392,6 +440,7 @@ async function startServer() {
           for (const line of lines) {
             const progMatch = line.match(/##PROGRESS:(\d+)##/);
             const skillMatch = line.match(/##SKILL_FILE:(.+)##/);
+            const projMatch = line.match(/##PROJECT_DATA:(.+)##/);
 
             if (progMatch) {
               scanState.progress = parseInt(progMatch[1]);
@@ -399,6 +448,12 @@ async function startServer() {
               if (!scanState.skillsFound.includes(skillMatch[1])) {
                 scanState.skillsFound.push(skillMatch[1]);
                 scanState.logs = `AI Skill detected in deep scan: ${skillMatch[1]}`;
+              }
+            } else if (projMatch) {
+              try {
+                scanState.projects.push(JSON.parse(projMatch[1]));
+              } catch (e) {
+                console.error("Failed to parse project data", e);
               }
             } else if (
               !line.startsWith("---") &&
@@ -409,7 +464,7 @@ async function startServer() {
           }
         })
         .stderr.on("data", (d) => {
-          scanState.logs = `ERROR: ${d.toString().split("\n")[0]}`;
+          scanState.logs += `\nERROR: ${d.toString().split("\n")[0]}`;
         });
 
       res.json({ status: "Deep scan started" });
@@ -466,9 +521,35 @@ async function startServer() {
           find "$p" -maxdepth 6 -name "learned_skills.json" 2>/dev/null | sed 's/^/##SKILL_FILE:/' | sed 's/$/##/'
 
           # Identify project roots
-          PROJS=$(find "$p" -maxdepth 10 \( -name "package.json" -o -name "requirements.txt" -o -name "go.mod" -o -name "project.json" -o -name ".git" -o -name "*.tmp" \) -printf '%h\n' 2>/dev/null | grep -v "node_modules" | sort -u | head -n 100)
+          echo "DEBUG: Scanning path $p"
+          PROJS=$(find "$p" -maxdepth 10 \( -name "package.json" -o -name "requirements.txt" -o -name "go.mod" -o -name "project.json" -o -name ".git" -o -name "*.tmp" \) -printf '%h\n' 2>&1 | tee /tmp/scan_debug.log | grep -v "node_modules" | sort -u | head -n 100)
+          echo "DEBUG: Found projects: $PROJS"
           for proj in $PROJS; do
             echo ">>> DETECTED: $proj"
+            
+            # Extract dependencies
+            DEPS='{}'
+            if [ -f "$proj/package.json" ]; then
+              DEPS=$(cat "$proj/package.json" | python3 -c 'import sys, json; print(json.dumps(json.load(sys.stdin).get("dependencies", {})))' || echo "{}")
+            elif [ -f "$proj/requirements.txt" ]; then
+              DEPS=$(cat "$proj/requirements.txt" | python3 -c 'import sys, json; print(json.dumps({line.strip().split("==")[0]: "" for line in sys.stdin if line.strip() and not line.startswith("#")}))' || echo "{}")
+            elif [ -f "$proj/go.mod" ]; then
+              DEPS=$(grep "^require " "$proj/go.mod" | awk '{print $2, "v" $3}' | python3 -c 'import sys, json; print(json.dumps(dict(line.split() for line in sys.stdin if line.strip())))' || echo "{}")
+            fi
+            
+            # Construct and output project data safely
+            python3 -c '
+import sys, json
+proj = sys.argv[1]
+deps_str = sys.argv[2]
+try:
+    deps = json.loads(deps_str)
+except:
+    deps = {}
+data = {"path": proj, "deps": deps}
+sys.stdout.write(f"##PROJECT_DATA:{json.dumps(data)}##\n")
+' "$proj" "$DEPS"
+            
             # Quick stat
             find "$proj" -maxdepth 3 -type f 2>/dev/null | grep -v "node_modules" | rev | cut -d. -f1 | rev | sort | uniq -c | sort -nr | head -n 8 | xargs echo "Files:"
             # Entry points
@@ -526,6 +607,7 @@ async function startServer() {
             const pathMatch = line.match(/##SCANNING_PATH:(.+)##/);
             const domainMatch = line.match(/##DOMAIN_PATH:(.+)##/);
             const skillMatch = line.match(/##SKILL_FILE:(.+)##/);
+            const projMatch = line.match(/##PROJECT_DATA:(.+)##/);
 
             if (progMatch) {
               scanState.progress = parseInt(progMatch[1]);
@@ -538,6 +620,12 @@ async function startServer() {
               if (!scanState.skillsFound.includes(skillMatch[1])) {
                 scanState.skillsFound.push(skillMatch[1]);
                 scanState.logs = `AI Skill detected: ${skillMatch[1]}`;
+              }
+            } else if (projMatch) {
+              try {
+                scanState.projects.push(JSON.parse(projMatch[1]));
+              } catch (e) {
+                console.error("Failed to parse project data", e);
               }
             } else if (pathMatch) {
               currentPathIndex++;
@@ -555,7 +643,7 @@ async function startServer() {
           }
         })
         .stderr.on("data", (d) => {
-          scanState.logs = `ERROR: ${d.toString().split("\n")[0]}`;
+          scanState.logs += `\nERROR: ${d.toString().split("\n")[0]}`;
         });
 
       res.json({ status: "Global scan started" });
@@ -604,6 +692,24 @@ async function startServer() {
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
+  });
+
+  app.post("/api/github/stash", (req, res) => {
+    const conn = vpsConnections.get("default")?.client;
+    if (!conn) return res.status(400).json({ error: "No VPS connected" });
+    conn.exec('git stash', (err, stream) => {
+      if (err) return res.status(500).json({ error: err.message });
+      stream.on('close', () => res.json({ status: 'success' }));
+    });
+  });
+
+  app.post("/api/github/stash-pop", (req, res) => {
+    const conn = vpsConnections.get("default")?.client;
+    if (!conn) return res.status(400).json({ error: "No VPS connected" });
+    conn.exec('git stash pop', (err, stream) => {
+      if (err) return res.status(500).json({ error: err.message });
+      stream.on('close', () => res.json({ status: 'success' }));
+    });
   });
 
   // --- VPS File API ---
