@@ -40,32 +40,37 @@ export const GeneratedContent: React.FC<GeneratedContentProps> = ({
     return htmlContent;
   }, [htmlContent, scanState?.status, scanState?.report]);
 
-  // Poll scan status if active
-  useEffect(() => {
-    let interval: any;
-    const isScanning =
+  const isScanning = React.useMemo(() => {
+    return (
       htmlContent.includes("Scan Result:\nstarted") ||
-      htmlContent.includes("Scan Result:\nGlobal scan started");
-
-    if (isScanning) {
-      interval = setInterval(async () => {
-        try {
-          const res = await fetch("/api/ssh/scan-status");
-          const data = await res.json();
-          setScanState(data);
-          if (data.status === "completed" || data.status === "failed") {
-            clearInterval(interval);
-          }
-        } catch (e) {
-          console.error(e);
-        }
-      }, 1000);
-    } else {
-      setScanState(null);
-    }
-    return () => clearInterval(interval);
+      htmlContent.includes("Scan Result:\nGlobal scan started")
+    );
   }, [htmlContent]);
 
+  // Poll scan status if active
+  useEffect(() => {
+    if (!isScanning) {
+      setScanState(null);
+      return;
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/api/ssh/scan-status");
+        const data = await res.json();
+        setScanState(data);
+        if (data.status === "completed" || data.status === "failed") {
+          clearInterval(interval);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isScanning]);
+
+  // Stable event listener
   useEffect(() => {
     const container = contentRef.current;
     if (!container) return;
@@ -115,6 +120,12 @@ export const GeneratedContent: React.FC<GeneratedContentProps> = ({
     };
 
     container.addEventListener("click", handleClick);
+    return () => container.removeEventListener("click", handleClick);
+  }, [onInteract, appContext]);
+
+  useEffect(() => {
+    const container = contentRef.current;
+    if (!container) return;
 
     // Process scripts only when loading is complete and content has changed
     if (!isLoading) {
@@ -180,9 +191,7 @@ export const GeneratedContent: React.FC<GeneratedContentProps> = ({
       processedHtmlContentRef.current = null;
     }
 
-    return () => {
-      container.removeEventListener("click", handleClick);
-    };
+    return () => {};
   }, [htmlContent, onInteract, appContext, isLoading]);
 
   // Auto-scroll to bottom logic
@@ -196,7 +205,9 @@ export const GeneratedContent: React.FC<GeneratedContentProps> = ({
       if (isNearBottom || isLoading) {
         container.scrollTo({
           top: container.scrollHeight,
-          behavior: "smooth",
+          // Use 'auto' (instant) during loading to prevent animation jank
+          // and reduce CPU overhead during rapid streaming updates.
+          behavior: isLoading ? "auto" : "smooth",
         });
       }
     }
