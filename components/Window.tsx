@@ -30,7 +30,7 @@ const MenuItem: React.FC<{
   className?: string;
 }> = ({ children, onClick, className }) => (
   <span
-    className={`menu-item cursor-pointer hover:text-blue-600 focus-visible:ring-1 focus-visible:ring-blue-400 outline-none rounded-sm px-0.5 ${className}`}
+    className={`menu-item cursor-pointer hover:text-blue-600 focus-visible:ring-1 focus-visible:ring-blue-500 focus-visible:outline-none rounded-sm px-0.5 ${className}`}
     onClick={onClick}
     onKeyDown={(e) => {
       if (e.key === "Enter" || e.key === " ") {
@@ -69,13 +69,13 @@ export const Window: React.FC<WindowProps> = ({
                 className={`w-1.5 h-1.5 rounded-full ${systemStatus.vpsConnected ? "bg-green-400" : "bg-red-400"}`}
                 title="VPS Connection"
                 role="status"
-                aria-label={systemStatus.vpsConnected ? "VPS Connected" : "VPS Disconnected"}
+                aria-label={`VPS ${systemStatus.vpsConnected ? "Connected" : "Disconnected"}`}
               ></span>
               <span
                 className={`w-1.5 h-1.5 rounded-full ${systemStatus.githubConnected ? "bg-green-400" : "bg-white/20"}`}
                 title="GitHub Connection"
                 role="status"
-                aria-label={systemStatus.githubConnected ? "GitHub Connected" : "GitHub Disconnected"}
+                aria-label={`GitHub ${systemStatus.githubConnected ? "Connected" : "Disconnected"}`}
               ></span>
             </div>
           )}
