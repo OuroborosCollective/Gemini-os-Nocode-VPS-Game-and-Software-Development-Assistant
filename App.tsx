@@ -6,7 +6,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { GeneratedContent } from "./components/GeneratedContent";
 import { Icon } from "./components/Icon";
+import { FileExplorerPanel } from "./components/FileExplorerPanel";
+import { GitHubManagerPanel } from "./components/GitHubManagerPanel";
 import { ParametersPanel } from "./components/ParametersPanel";
+import { SettingsPanel } from "./components/SettingsPanel";
 import { Window } from "./components/Window";
 import {
   APP_DEFINITIONS_CONFIG,
@@ -84,17 +87,15 @@ const App: React.FC = () => {
       try {
         const stream = streamAppContent(historyForLlm, maxHistoryLength);
         let lastUpdateTime = Date.now();
-        const THROTTLE_MS = 64; // Batch updates to reduce re-renders (~15fps during stream)
-
         for await (const chunk of stream) {
           accumulatedContent += chunk;
           const now = Date.now();
-          if (now - lastUpdateTime > THROTTLE_MS) {
+          if (now - lastUpdateTime > 64) {
             setLlmContent(accumulatedContent);
             lastUpdateTime = now;
           }
         }
-        setLlmContent(accumulatedContent); // Final sync
+        setLlmContent(accumulatedContent); // Ensure final state is set
       } catch (e: any) {
         setError("Failed to stream content from the API.");
         console.error(e);
@@ -125,7 +126,7 @@ const App: React.FC = () => {
         };
       });
     }
-  }, [llmContent, isLoading, currentAppPath, isStatefulnessEnabled]);
+  }, [isLoading, currentAppPath, isStatefulnessEnabled]);
 
   const handleInteraction = useCallback(
     async (interactionData: InteractionData) => {
@@ -228,6 +229,20 @@ const App: React.FC = () => {
               });
               return res.json();
             },
+            "tool:github_stash": async (val) => {
+              const res = await fetch("/api/github/stash", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+              });
+              return res.json();
+            },
+            "tool:github_stash_pop": async (val) => {
+              const res = await fetch("/api/github/stash-pop", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+              });
+              return res.json();
+            },
             "tool:vps_discovered_paths": async () => {
               const res = await fetch("/api/ssh/discovered-paths");
               return res.json();
@@ -247,6 +262,10 @@ const App: React.FC = () => {
               const res = await fetch("/api/ssh/verify", { method: "POST" });
               return res.json();
             },
+            "tool:vps_check_connection": async () => {
+              const res = await fetch("/api/ssh/check", { method: "POST" });
+              return res.json();
+            },
             "tool:ai_learn_skill": async (val) => {
               const skill = safeParse(val);
               const res = await fetch("/api/skills", {
@@ -257,12 +276,18 @@ const App: React.FC = () => {
               return res.json();
             },
             "tool:vps_deep_scan": async (val) => {
-              const res = await fetch("/api/ssh/deep-scan", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ path: val }),
-              });
-              return res.json();
+              try {
+                const res = await fetch("/api/ssh/deep-scan", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ path: val }),
+                });
+                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                return res.json();
+              } catch (e) {
+                console.error("Failed to deep scan:", e);
+                return { error: "Failed to initiate deep scan" };
+              }
             },
             "tool:vps_global_scan": async () => {
               const res = await fetch("/api/ssh/global-scan", {
@@ -354,6 +379,8 @@ const App: React.FC = () => {
                 (data.lastRun || 'never') +
                 '\nLogs:\n' +
                 (data.logs || '');
+            } else if (interactionData.id === 'tool:vps_check_connection') {
+              toolResult = data.connected ? 'Connected' : 'Not Connected';
             } else if (interactionData.id === 'tool:vps_verify_installer') {
               toolResult = data.error
                 ? 'Error: ' + data.error
@@ -581,13 +608,24 @@ const App: React.FC = () => {
     }
   };
 
-  const handleMasterClose = () => {
+  const handleMasterClose = useCallback(() => {
     if (isParametersOpen) {
       handleToggleParametersPanel();
     } else if (activeApp) {
       handleCloseAppView();
     }
-  };
+  }, [isParametersOpen, handleToggleParametersPanel, handleCloseAppView, activeApp]);
+
+  // Global Escape key listener
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        handleMasterClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleMasterClose]);
 
   return (
     <div className="bg-white w-full min-h-screen flex items-center justify-center sm:p-4">
@@ -614,6 +652,12 @@ const App: React.FC = () => {
               isStatefulnessEnabled={isStatefulnessEnabled}
               onSetStatefulness={handleSetStatefulness}
             />
+          ) : activeApp?.id === "settings_app" ? (
+            <SettingsPanel />
+          ) : activeApp?.id === "file_explorer" ? (
+            <FileExplorerPanel />
+          ) : activeApp?.id === "github_manager" ? (
+            <GitHubManagerPanel />
           ) : !activeApp ? (
             <DesktopView onAppOpen={handleAppOpen} />
           ) : (
