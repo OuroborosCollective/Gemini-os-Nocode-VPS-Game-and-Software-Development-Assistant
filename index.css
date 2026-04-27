@@ -15,7 +15,7 @@
 /* Custom Registry Utilities */
 @layer utilities {
   .llm-button {
-    @apply bg-blue-600 text-white border-none rounded py-0 px-1 m-0.5 cursor-pointer text-[9px] font-bold text-center transition-all hover:bg-blue-700 active:bg-blue-800 active:transform active:translate-y-px truncate max-w-[120px] uppercase tracking-tighter;
+    @apply bg-blue-600 text-white border-none rounded py-0 px-1 m-0.5 cursor-pointer text-[9px] font-bold text-center transition-all hover:bg-blue-700 active:bg-blue-800 active:transform active:translate-y-px truncate max-w-[120px] uppercase tracking-tighter focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-400;
   }
   .llm-text {
     @apply m-0 text-[9px] text-gray-800 leading-[1.1];

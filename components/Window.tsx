@@ -14,6 +14,7 @@ interface WindowProps {
   onToggleParameters: () => void;
   onExitToDesktop: () => void;
   isParametersPanelOpen?: boolean;
+  isLoading?: boolean;
   onRefreshHealth?: () => void;
   systemStatus?: {
     status: string;
@@ -52,6 +53,7 @@ export const Window: React.FC<WindowProps> = ({
   onToggleParameters,
   onExitToDesktop,
   isParametersPanelOpen,
+  isLoading,
   systemStatus,
   onRefreshHealth,
 }) => {
@@ -59,18 +61,18 @@ export const Window: React.FC<WindowProps> = ({
     <div className="w-full h-[100dvh] sm:w-[800px] sm:h-[600px] bg-white border border-gray-300 sm:rounded-xl shadow-2xl flex flex-col relative overflow-hidden font-sans backdrop-blur-sm bg-white/80">
       {/* Title Bar */}
       <div className="bg-gray-800/90 text-white py-0 px-1.5 font-semibold text-[9px] sm:text-[10px] flex justify-between items-center select-none cursor-default sm:rounded-t-lg flex-shrink-0 h-[18px]">
-        <div className="flex items-center gap-1 overflow-hidden">
+        <div className="flex items-center gap-1 overflow-hidden max-w-[70%]">
           <span className="title-bar-text truncate">{title}</span>
           {systemStatus && (
-            <div className="flex gap-0.5 ml-1.5">
+            <div className="flex gap-1 ml-1.5">
               <span
-                className={`w-0.5 h-0.5 rounded-full ${systemStatus.vpsConnected ? "bg-green-400" : "bg-red-400"}`}
+                className={`w-1.5 h-1.5 rounded-full ${systemStatus.vpsConnected ? "bg-green-400" : "bg-red-400"}`}
                 title="VPS Connection"
                 role="status"
                 aria-label={`VPS ${systemStatus.vpsConnected ? "Connected" : "Disconnected"}`}
               ></span>
               <span
-                className={`w-0.5 h-0.5 rounded-full ${systemStatus.githubConnected ? "bg-green-400" : "bg-white/20"}`}
+                className={`w-1.5 h-1.5 rounded-full ${systemStatus.githubConnected ? "bg-green-400" : "bg-white/20"}`}
                 title="GitHub Connection"
                 role="status"
                 aria-label={`GitHub ${systemStatus.githubConnected ? "Connected" : "Disconnected"}`}
@@ -78,6 +80,12 @@ export const Window: React.FC<WindowProps> = ({
             </div>
           )}
         </div>
+        {isLoading && (
+          <div className="flex items-center gap-1 ml-auto text-[7px] text-green-400 animate-pulse font-bold tracking-widest uppercase">
+            <span className="w-1 h-1 rounded-full bg-green-400"></span>
+            Live
+          </div>
+        )}
       </div>
 
       {/* Menu Bar */}
