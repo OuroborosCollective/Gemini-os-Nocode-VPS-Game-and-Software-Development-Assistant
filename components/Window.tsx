@@ -29,10 +29,13 @@ const MenuItem: React.FC<{
   className?: string;
 }> = ({ children, onClick, className }) => (
   <span
-    className={`menu-item cursor-pointer hover:text-blue-600 ${className}`}
+    className={`menu-item cursor-pointer hover:text-blue-600 focus-visible:ring-1 focus-visible:ring-blue-500 focus-visible:outline-none rounded-sm px-0.5 ${className}`}
     onClick={onClick}
     onKeyDown={(e) => {
-      if (e.key === "Enter" || e.key === " ") onClick?.();
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onClick?.();
+      }
     }}
     tabIndex={0}
     role="button"
@@ -63,10 +66,14 @@ export const Window: React.FC<WindowProps> = ({
               <span
                 className={`w-0.5 h-0.5 rounded-full ${systemStatus.vpsConnected ? "bg-green-400" : "bg-red-400"}`}
                 title="VPS Connection"
+                role="status"
+                aria-label={`VPS ${systemStatus.vpsConnected ? "Connected" : "Disconnected"}`}
               ></span>
               <span
                 className={`w-0.5 h-0.5 rounded-full ${systemStatus.githubConnected ? "bg-green-400" : "bg-white/20"}`}
                 title="GitHub Connection"
+                role="status"
+                aria-label={`GitHub ${systemStatus.githubConnected ? "Connected" : "Disconnected"}`}
               ></span>
             </div>
           )}
