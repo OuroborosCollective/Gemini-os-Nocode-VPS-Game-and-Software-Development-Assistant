@@ -8,10 +8,10 @@ import { AppDefinition } from "../types";
 
 interface IconProps {
   app: AppDefinition;
-  onInteract: () => void;
+  onInteract: (app: AppDefinition) => void;
 }
 
-export const Icon: React.FC<IconProps> = ({ app, onInteract }) => {
+export const Icon = React.memo<IconProps>(({ app, onInteract }) => {
   return (
     <div
       className="icon"
@@ -30,4 +30,4 @@ export const Icon: React.FC<IconProps> = ({ app, onInteract }) => {
       <div className="icon-label">{app.name}</div>
     </div>
   );
-};
+});

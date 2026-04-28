@@ -18,15 +18,15 @@ import {
 import { streamAppContent } from "./services/geminiService";
 import { AppDefinition, InteractionData } from "./types";
 
-const DesktopView: React.FC<{ onAppOpen: (app: AppDefinition) => void }> = ({
+const DesktopView = React.memo<{ onAppOpen: (app: AppDefinition) => void }>(({
   onAppOpen,
 }) => (
   <div className="flex flex-wrap content-start p-4">
     {APP_DEFINITIONS_CONFIG.map((app) => (
-      <Icon key={app.id} app={app} onInteract={() => onAppOpen(app)} />
+      <Icon key={app.id} app={app} onInteract={onAppOpen} />
     ))}
   </div>
-);
+));
 
 const App: React.FC = () => {
   const [activeApp, setActiveApp] = useState<AppDefinition | null>(null);
@@ -50,6 +50,7 @@ const App: React.FC = () => {
   >({});
   const [currentAppPath, setCurrentAppPath] = useState<string[]>([]); // For UI graph statefulness
   const [systemStatus, setSystemStatus] = useState<any>(null);
+
 
   // Health check polling
   useEffect(() => {
@@ -482,12 +483,10 @@ const App: React.FC = () => {
       activeApp,
       currentMaxHistoryLength,
       currentAppPath,
-      isStatefulnessEnabled,
-      appContentCache,
     ],
   );
 
-  const handleAppOpen = (app: AppDefinition) => {
+  const handleAppOpen = useCallback((app: AppDefinition) => {
     const initialInteraction: InteractionData = {
       id: app.id,
       type: "app_open",
@@ -516,18 +515,24 @@ const App: React.FC = () => {
     } else {
       internalHandleLlmRequest(newHistory, currentMaxHistoryLength);
     }
-  };
+  }, [
+    isParametersOpen,
+    isStatefulnessEnabled,
+    appContentCache,
+    internalHandleLlmRequest,
+    currentMaxHistoryLength,
+  ]);
 
-  const handleCloseAppView = () => {
+  const handleCloseAppView = useCallback(() => {
     setActiveApp(null);
     setLlmContent("");
     setError(null);
     setInteractionHistory([]);
     setCurrentAppPath([]);
     setPreviousActiveApp(null);
-  };
+  }, []);
 
-  const handleToggleParametersPanel = () => {
+  const handleToggleParametersPanel = useCallback(() => {
     setIsParametersOpen((prevIsOpen) => {
       const nowOpeningParameters = !prevIsOpen;
       if (nowOpeningParameters) {
@@ -574,20 +579,27 @@ const App: React.FC = () => {
       }
       return nowOpeningParameters;
     });
-  };
+  }, [
+    activeApp,
+    previousActiveApp,
+    isStatefulnessEnabled,
+    appContentCache,
+    internalHandleLlmRequest,
+    currentMaxHistoryLength,
+  ]);
 
-  const handleUpdateHistoryLength = (newLength: number) => {
+  const handleUpdateHistoryLength = useCallback((newLength: number) => {
     setCurrentMaxHistoryLength(newLength);
     // Trim interaction history if new length is shorter
     setInteractionHistory((prev) => prev.slice(0, newLength));
-  };
+  }, []);
 
-  const handleSetStatefulness = (enabled: boolean) => {
+  const handleSetStatefulness = useCallback((enabled: boolean) => {
     setIsStatefulnessEnabled(enabled);
     if (!enabled) {
       setAppContentCache({});
     }
-  };
+  }, []);
 
   const windowTitle = isParametersOpen
     ? "Gemini Computer"
@@ -596,7 +608,7 @@ const App: React.FC = () => {
       : "Gemini Computer";
   const contentBgColor = "#ffffff";
 
-  const handleRefreshHealth = async () => {
+  const handleRefreshHealth = useCallback(async () => {
     try {
       const res = await fetch("/api/health");
       if (res.ok) {
@@ -606,7 +618,7 @@ const App: React.FC = () => {
     } catch (e) {
       console.warn("Health check failed", e);
     }
-  };
+  }, []);
 
   const handleMasterClose = useCallback(() => {
     if (isParametersOpen) {
@@ -614,7 +626,12 @@ const App: React.FC = () => {
     } else if (activeApp) {
       handleCloseAppView();
     }
-  }, [isParametersOpen, handleToggleParametersPanel, handleCloseAppView, activeApp]);
+  }, [
+    isParametersOpen,
+    handleToggleParametersPanel,
+    activeApp,
+    handleCloseAppView,
+  ]);
 
   // Global Escape key listener
   useEffect(() => {
