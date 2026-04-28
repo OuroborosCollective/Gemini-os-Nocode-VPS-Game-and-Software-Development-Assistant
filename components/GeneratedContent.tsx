@@ -13,7 +13,7 @@ interface GeneratedContentProps {
   isLoading: boolean; // Added isLoading prop
 }
 
-export const GeneratedContent: React.FC<GeneratedContentProps> = ({
+export const GeneratedContent = React.memo<GeneratedContentProps>(({
   htmlContent,
   onInteract,
   appContext,
@@ -281,4 +281,4 @@ export const GeneratedContent: React.FC<GeneratedContentProps> = ({
       )}
     </div>
   );
-};
+});

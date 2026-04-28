@@ -24,11 +24,11 @@ interface WindowProps {
   } | null;
 }
 
-const MenuItem: React.FC<{
+const MenuItem = React.memo<{
   children: React.ReactNode;
   onClick?: () => void;
   className?: string;
-}> = ({ children, onClick, className }) => (
+}>(({ children, onClick, className }) => (
   <span
     className={`menu-item cursor-pointer hover:text-blue-600 focus-visible:ring-1 focus-visible:ring-blue-500 focus-visible:outline-none rounded-sm px-0.5 ${className}`}
     onClick={onClick}
@@ -43,7 +43,7 @@ const MenuItem: React.FC<{
   >
     {children}
   </span>
-);
+));
 
 export const Window: React.FC<WindowProps> = ({
   title,

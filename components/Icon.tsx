@@ -8,15 +8,15 @@ import { AppDefinition } from "../types";
 
 interface IconProps {
   app: AppDefinition;
-  onInteract: () => void;
+  onInteract: (app: AppDefinition) => void;
 }
 
-export const Icon: React.FC<IconProps> = ({ app, onInteract }) => {
+export const Icon = React.memo<IconProps>(({ app, onInteract }) => {
   return (
     <div
       className="icon"
-      onClick={onInteract}
-      onKeyDown={(e) => e.key === "Enter" && onInteract()}
+      onClick={() => onInteract(app)}
+      onKeyDown={(e) => e.key === "Enter" && onInteract(app)}
       tabIndex={0}
       role="button"
       aria-label={`Open ${app.name}`}
@@ -25,4 +25,4 @@ export const Icon: React.FC<IconProps> = ({ app, onInteract }) => {
       <div className="icon-label">{app.name}</div>
     </div>
   );
-};
+});
