@@ -16,7 +16,12 @@ export const Icon: React.FC<IconProps> = ({ app, onInteract }) => {
     <div
       className="icon"
       onClick={onInteract}
-      onKeyDown={(e) => e.key === "Enter" && onInteract()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onInteract();
+        }
+      }}
       tabIndex={0}
       role="button"
       aria-label={`Open ${app.name}`}
