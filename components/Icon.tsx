@@ -15,8 +15,13 @@ export const Icon = React.memo<IconProps>(({ app, onInteract }) => {
   return (
     <div
       className="icon"
-      onClick={() => onInteract(app)}
-      onKeyDown={(e) => e.key === "Enter" && onInteract(app)}
+      onClick={onInteract}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onInteract();
+        }
+      }}
       tabIndex={0}
       role="button"
       aria-label={`Open ${app.name}`}

@@ -96,6 +96,9 @@ export const ParametersPanel: React.FC<ParametersPanelProps> = ({
             aria-describedby="historyLengthHelpText"
           />
         </div>
+        <p id="historyLengthHelpText" className="text-[10px] text-gray-500 mt-1 uppercase tracking-tighter">
+          Number of previous interactions sent to the AI (0-10).
+        </p>
       </div>
 
       {/* Statefulness Row */}
@@ -117,6 +120,9 @@ export const ParametersPanel: React.FC<ParametersPanelProps> = ({
             aria-describedby="statefulnessHelpText"
           />
         </div>
+        <p id="statefulnessHelpText" className="text-[10px] text-gray-500 mt-1 uppercase tracking-tighter">
+          Cache app content to maintain state across interactions.
+        </p>
       </div>
 
       {/* Action Buttons */}
