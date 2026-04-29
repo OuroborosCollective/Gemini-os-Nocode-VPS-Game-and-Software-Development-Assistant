@@ -15,11 +15,11 @@ export const Icon = React.memo<IconProps>(({ app, onInteract }) => {
   return (
     <div
       className="icon"
-      onClick={onInteract}
+      onClick={() => onInteract(app)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onInteract();
+          onInteract(app);
         }
       }}
       tabIndex={0}

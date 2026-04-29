@@ -37,7 +37,7 @@
     @apply w-full flex items-center mb-0.5 gap-0.5 flex-wrap;
   }
   .llm-label {
-    @apply mr-0.5 text-[8px] font-bold text-gray-400 uppercase tracking-tighter;
+    @apply mr-0.5 text-[10px] font-bold text-gray-400 uppercase tracking-tighter;
   }
   .icon {
     @apply w-10 h-12 flex flex-col items-center justify-start text-center m-0.5 p-0.5 cursor-pointer select-none rounded transition-colors hover:bg-blue-100 focus:bg-blue-100 focus:outline-none focus:ring-1 focus:ring-blue-500/50;
@@ -69,7 +69,7 @@
     @apply text-rose-400 block mb-1 whitespace-pre-wrap leading-tight;
   }
   .llm-terminal-label {
-    @apply text-[8px] uppercase tracking-widest text-gray-600 font-bold mb-1 flex items-center gap-1 opacity-70;
+    @apply text-[10px] uppercase tracking-widest text-gray-600 font-bold mb-1 flex items-center gap-1 opacity-70;
   }
   .llm-grid {
     @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-1 p-0.5;
@@ -78,7 +78,7 @@
     @apply bg-white border border-gray-100 rounded p-1 flex flex-col gap-0.5 shadow-sm transition-all hover:shadow-md hover:border-blue-100;
   }
   .llm-pill {
-    @apply px-1 py-0 text-[8px] font-bold uppercase rounded border border-current inline-block w-fit opacity-80 leading-tight bg-gray-50;
+    @apply px-1 py-0 text-[10px] font-bold uppercase rounded border border-current inline-block w-fit opacity-80 leading-tight bg-gray-50;
   }
 
   @keyframes shimmer {
