@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 /* tslint:disable */
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 
 interface WindowProps {
   title: string;
@@ -15,13 +15,6 @@ interface WindowProps {
   onExitToDesktop: () => void;
   isParametersPanelOpen?: boolean;
   isLoading?: boolean;
-  onRefreshHealth?: () => void;
-  systemStatus?: {
-    status: string;
-    uptime: number;
-    vpsConnected: boolean;
-    githubConnected: boolean;
-  } | null;
 }
 
 const MenuItem = React.memo<{
@@ -45,7 +38,7 @@ const MenuItem = React.memo<{
   </span>
 ));
 
-export const Window: React.FC<WindowProps> = ({
+export const Window = React.memo<WindowProps>(({
   title,
   children,
   onClose,
@@ -54,9 +47,44 @@ export const Window: React.FC<WindowProps> = ({
   onExitToDesktop,
   isParametersPanelOpen,
   isLoading,
-  systemStatus,
-  onRefreshHealth,
 }) => {
+  const [systemStatus, setSystemStatus] = useState<{
+    status: string;
+    uptime: number;
+    vpsConnected: boolean;
+    githubConnected: boolean;
+  } | null>(null);
+
+  // Health check polling
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const res = await fetch("/api/health");
+        if (res.ok) {
+          const data = await res.json();
+          setSystemStatus(data);
+        }
+      } catch (e) {
+        console.warn("Health check failed", e);
+      }
+    };
+    checkHealth();
+    const interval = setInterval(checkHealth, 30000); // Pulse every 30s
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleRefreshHealth = useCallback(async () => {
+    try {
+      const res = await fetch("/api/health");
+      if (res.ok) {
+        const data = await res.json();
+        setSystemStatus(data);
+      }
+    } catch (e) {
+      console.warn("Health check failed", e);
+    }
+  }, []);
+
   return (
     <div className="w-full h-[100dvh] sm:w-[800px] sm:h-[600px] bg-white border border-gray-300 sm:rounded-xl shadow-2xl flex flex-col relative overflow-hidden font-sans backdrop-blur-sm bg-white/80">
       {/* Title Bar */}
@@ -94,7 +122,7 @@ export const Window: React.FC<WindowProps> = ({
           <MenuItem onClick={onToggleParameters}>Params</MenuItem>
         )}
         {systemStatus && (
-          <MenuItem onClick={onRefreshHealth}>
+          <MenuItem onClick={handleRefreshHealth}>
             {systemStatus.status === "ok" ? "Online" : "Error"}
           </MenuItem>
         )}
@@ -109,4 +137,4 @@ export const Window: React.FC<WindowProps> = ({
       <div className="flex-grow overflow-y-auto">{children}</div>
     </div>
   );
-};
+});
