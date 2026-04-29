@@ -60,7 +60,7 @@ export const Window: React.FC<WindowProps> = ({
   return (
     <div className="w-full h-[100dvh] sm:w-[800px] sm:h-[600px] bg-white border border-gray-300 sm:rounded-xl shadow-2xl flex flex-col relative overflow-hidden font-sans backdrop-blur-sm bg-white/80">
       {/* Title Bar */}
-      <div className="bg-gray-800/90 text-white py-0 px-1.5 font-semibold text-[9px] sm:text-[10px] flex justify-between items-center select-none cursor-default sm:rounded-t-lg flex-shrink-0 h-[18px]">
+      <div className="bg-gray-800/90 text-white py-0 px-2 font-semibold text-[10px] sm:text-[11px] flex justify-between items-center select-none cursor-default sm:rounded-t-lg flex-shrink-0 h-[24px]">
         <div className="flex items-center gap-1 overflow-hidden max-w-[70%]">
           <span className="title-bar-text truncate">{title}</span>
           {systemStatus && (
@@ -81,7 +81,7 @@ export const Window: React.FC<WindowProps> = ({
           )}
         </div>
         {isLoading && (
-          <div className="flex items-center gap-1 ml-auto text-[7px] text-green-400 animate-pulse font-bold tracking-widest uppercase">
+          <div className="flex items-center gap-1 ml-auto text-[10px] text-green-400 animate-pulse font-bold tracking-widest uppercase">
             <span className="w-1 h-1 rounded-full bg-green-400"></span>
             Live
           </div>
@@ -89,7 +89,7 @@ export const Window: React.FC<WindowProps> = ({
       </div>
 
       {/* Menu Bar */}
-      <div className="bg-gray-100/90 py-0 px-1 border-b border-gray-200 select-none flex gap-0.5 flex-shrink-0 text-[6px] sm:text-[7px] text-gray-700 items-center font-bold uppercase tracking-tight h-[14px]">
+      <div className="bg-gray-100/90 py-0 px-1.5 border-b border-gray-200 select-none flex gap-1 flex-shrink-0 text-[10px] sm:text-[10px] text-gray-700 items-center font-bold uppercase tracking-tight h-[20px]">
         {!isParametersPanelOpen && (
           <MenuItem onClick={onToggleParameters}>Params</MenuItem>
         )}
