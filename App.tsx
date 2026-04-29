@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 /* tslint:disable */
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { GeneratedContent } from "./components/GeneratedContent";
 import { Icon } from "./components/Icon";
 import { FileExplorerPanel } from "./components/FileExplorerPanel";
@@ -49,26 +49,25 @@ const App: React.FC = () => {
     Record<string, string>
   >({});
   const [currentAppPath, setCurrentAppPath] = useState<string[]>([]); // For UI graph statefulness
-  const [systemStatus, setSystemStatus] = useState<any>(null);
 
+  // Latest Ref pattern for callback stability
+  const interactionHistoryRef = useRef(interactionHistory);
+  const activeAppRef = useRef(activeApp);
+  const currentAppPathRef = useRef(currentAppPath);
+  const currentMaxHistoryLengthRef = useRef(currentMaxHistoryLength);
+  const isStatefulnessEnabledRef = useRef(isStatefulnessEnabled);
+  const appContentCacheRef = useRef(appContentCache);
+  const previousActiveAppRef = useRef(previousActiveApp);
+  const isParametersOpenRef = useRef(isParametersOpen);
 
-  // Health check polling
-  useEffect(() => {
-    const checkHealth = async () => {
-      try {
-        const res = await fetch("/api/health");
-        if (res.ok) {
-          const data = await res.json();
-          setSystemStatus(data);
-        }
-      } catch (e) {
-        console.warn("Health check failed", e);
-      }
-    };
-    checkHealth();
-    const interval = setInterval(checkHealth, 30000); // Pulse every 30s
-    return () => clearInterval(interval);
-  }, []);
+  useEffect(() => { interactionHistoryRef.current = interactionHistory; }, [interactionHistory]);
+  useEffect(() => { activeAppRef.current = activeApp; }, [activeApp]);
+  useEffect(() => { currentAppPathRef.current = currentAppPath; }, [currentAppPath]);
+  useEffect(() => { currentMaxHistoryLengthRef.current = currentMaxHistoryLength; }, [currentMaxHistoryLength]);
+  useEffect(() => { isStatefulnessEnabledRef.current = isStatefulnessEnabled; }, [isStatefulnessEnabled]);
+  useEffect(() => { appContentCacheRef.current = appContentCache; }, [appContentCache]);
+  useEffect(() => { previousActiveAppRef.current = previousActiveApp; }, [previousActiveApp]);
+  useEffect(() => { isParametersOpenRef.current = isParametersOpen; }, [isParametersOpen]);
 
   const internalHandleLlmRequest = useCallback(
     async (historyForLlm: InteractionData[], maxHistoryLength: number) => {
@@ -135,6 +134,11 @@ const App: React.FC = () => {
         handleCloseAppView();
         return;
       }
+
+      const currentHistory = interactionHistoryRef.current;
+      const currentApp = activeAppRef.current;
+      const currentPath = currentAppPathRef.current;
+      const currentMaxLength = currentMaxHistoryLengthRef.current;
 
       let toolResult = "";
       if (interactionData.id.startsWith("tool:")) {
@@ -457,17 +461,17 @@ const App: React.FC = () => {
       }
 
       const updatedInteraction = toolResult
-        ? {...interactionData, value: '[TOOL_RESULT]: ' + toolResult}
+        ? { ...interactionData, value: "[TOOL_RESULT]: " + toolResult }
         : interactionData;
 
       const newHistory = [
         updatedInteraction,
-        ...interactionHistory.slice(0, currentMaxHistoryLength - 1),
+        ...currentHistory.slice(0, currentMaxLength - 1),
       ];
       setInteractionHistory(newHistory);
 
-      const newPath = activeApp
-        ? [...currentAppPath, interactionData.id]
+      const newPath = currentApp
+        ? [...currentPath, interactionData.id]
         : [interactionData.id];
       setCurrentAppPath(newPath);
 
@@ -475,53 +479,47 @@ const App: React.FC = () => {
       setError(null);
 
       // Always re-trigger LLM for tools or if not cached
-      internalHandleLlmRequest(newHistory, currentMaxHistoryLength);
+      internalHandleLlmRequest(newHistory, currentMaxLength);
     },
-    [
-      interactionHistory,
-      internalHandleLlmRequest,
-      activeApp,
-      currentMaxHistoryLength,
-      currentAppPath,
-    ],
+    [internalHandleLlmRequest],
   );
 
-  const handleAppOpen = useCallback((app: AppDefinition) => {
-    const initialInteraction: InteractionData = {
-      id: app.id,
-      type: "app_open",
-      elementText: app.name,
-      elementType: "icon",
-      appContext: app.id,
-    };
+  const handleAppOpen = useCallback(
+    (app: AppDefinition) => {
+      const initialInteraction: InteractionData = {
+        id: app.id,
+        type: "app_open",
+        elementText: app.name,
+        elementType: "icon",
+        appContext: app.id,
+      };
 
-    const newHistory = [initialInteraction];
-    setInteractionHistory(newHistory);
+      const newHistory = [initialInteraction];
+      setInteractionHistory(newHistory);
 
-    const appPath = [app.id];
-    setCurrentAppPath(appPath);
-    const cacheKey = appPath.join("__");
+      const appPath = [app.id];
+      setCurrentAppPath(appPath);
+      const cacheKey = appPath.join("__");
 
-    if (isParametersOpen) {
-      setIsParametersOpen(false);
-    }
-    setActiveApp(app);
-    setLlmContent("");
-    setError(null);
+      if (isParametersOpenRef.current) {
+        setIsParametersOpen(false);
+      }
+      setActiveApp(app);
+      setLlmContent("");
+      setError(null);
 
-    if (isStatefulnessEnabled && appContentCache[cacheKey]) {
-      setLlmContent(appContentCache[cacheKey]);
-      setIsLoading(false);
-    } else {
-      internalHandleLlmRequest(newHistory, currentMaxHistoryLength);
-    }
-  }, [
-    isParametersOpen,
-    isStatefulnessEnabled,
-    appContentCache,
-    internalHandleLlmRequest,
-    currentMaxHistoryLength,
-  ]);
+      if (
+        isStatefulnessEnabledRef.current &&
+        appContentCacheRef.current[cacheKey]
+      ) {
+        setLlmContent(appContentCacheRef.current[cacheKey]);
+        setIsLoading(false);
+      } else {
+        internalHandleLlmRequest(newHistory, currentMaxHistoryLengthRef.current);
+      }
+    },
+    [internalHandleLlmRequest],
+  );
 
   const handleCloseAppView = useCallback(() => {
     setActiveApp(null);
@@ -538,7 +536,7 @@ const App: React.FC = () => {
       if (nowOpeningParameters) {
         // Store the currently active app (if any) so it can be restored,
         // or null if no app is active (desktop view).
-        setPreviousActiveApp(activeApp);
+        setPreviousActiveApp(activeAppRef.current);
         setActiveApp(null); // Clear active app to show parameters panel
         setLlmContent("");
         setError(null);
@@ -546,28 +544,35 @@ const App: React.FC = () => {
         // as they might be relevant if the user returns to an app.
       } else {
         // Closing parameters panel - try to restore previous app
-        if (previousActiveApp) {
-          setActiveApp(previousActiveApp);
+        const prevApp = previousActiveAppRef.current;
+        if (prevApp) {
+          setActiveApp(prevApp);
           setPreviousActiveApp(null);
           // The effect in handleAppOpen handles re-request or cache
           // But here we need to manually trigger because we're bypassing handleAppOpen
-          const appPath = [previousActiveApp.id];
+          const appPath = [prevApp.id];
           setCurrentAppPath(appPath);
           const cacheKey = appPath.join("__");
-          if (isStatefulnessEnabled && appContentCache[cacheKey]) {
-            setLlmContent(appContentCache[cacheKey]);
+          if (
+            isStatefulnessEnabledRef.current &&
+            appContentCacheRef.current[cacheKey]
+          ) {
+            setLlmContent(appContentCacheRef.current[cacheKey]);
           } else {
             // Re-trigger if no cache
             const initialInteraction: InteractionData = {
-              id: previousActiveApp.id,
+              id: prevApp.id,
               type: "app_open",
-              elementText: previousActiveApp.name,
+              elementText: prevApp.name,
               elementType: "icon",
-              appContext: previousActiveApp.id,
+              appContext: prevApp.id,
             };
             const newHistory = [initialInteraction];
             setInteractionHistory(newHistory);
-            internalHandleLlmRequest(newHistory, currentMaxHistoryLength);
+            internalHandleLlmRequest(
+              newHistory,
+              currentMaxHistoryLengthRef.current,
+            );
           }
         } else {
           setActiveApp(null);
@@ -579,14 +584,7 @@ const App: React.FC = () => {
       }
       return nowOpeningParameters;
     });
-  }, [
-    activeApp,
-    previousActiveApp,
-    isStatefulnessEnabled,
-    appContentCache,
-    internalHandleLlmRequest,
-    currentMaxHistoryLength,
-  ]);
+  }, [internalHandleLlmRequest]);
 
   const handleUpdateHistoryLength = useCallback((newLength: number) => {
     setCurrentMaxHistoryLength(newLength);
@@ -607,18 +605,6 @@ const App: React.FC = () => {
       ? activeApp.name
       : "Gemini Computer";
   const contentBgColor = "#ffffff";
-
-  const handleRefreshHealth = useCallback(async () => {
-    try {
-      const res = await fetch("/api/health");
-      if (res.ok) {
-        const data = await res.json();
-        setSystemStatus(data);
-      }
-    } catch (e) {
-      console.warn("Health check failed", e);
-    }
-  }, []);
 
   const handleMasterClose = useCallback(() => {
     if (isParametersOpen) {
@@ -655,8 +641,6 @@ const App: React.FC = () => {
         onExitToDesktop={handleCloseAppView}
         isParametersPanelOpen={isParametersOpen}
         isLoading={isLoading}
-        systemStatus={systemStatus}
-        onRefreshHealth={handleRefreshHealth}
       >
         <div
           className="w-full h-full"
