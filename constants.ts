@@ -17,6 +17,12 @@ export const APP_DEFINITIONS_CONFIG: AppDefinition[] = [
   { id: "ai_tools_app", name: "AI Tools", icon: "🤖", color: "#e0f2f1" },
   { id: "ai_skills_app", name: "AI Skills", icon: "🧠", color: "#fff9c4" },
   { id: "notepad_app", name: "Notepad", icon: "📝", color: "#fffde7" },
+  {
+    id: "sovereign_studio",
+    name: "Sovereign Studio",
+    icon: "🏛️",
+    color: "#f3e8ff",
+  },
   { id: "settings_app", name: "Settings", icon: "⚙️", color: "#e7f3ff" },
 ];
 

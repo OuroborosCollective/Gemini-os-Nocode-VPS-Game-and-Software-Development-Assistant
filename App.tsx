@@ -8,6 +8,7 @@ import { GeneratedContent } from "./components/GeneratedContent";
 import { Icon } from "./components/Icon";
 import { FileExplorerPanel } from "./components/FileExplorerPanel";
 import { GitHubManagerPanel } from "./components/GitHubManagerPanel";
+import { SovereignStudioPanel } from "./components/SovereignStudioPanel";
 import { ParametersPanel } from "./components/ParametersPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Window } from "./components/Window";
@@ -676,6 +677,8 @@ const App: React.FC = () => {
             <FileExplorerPanel />
           ) : activeApp?.id === "github_manager" ? (
             <GitHubManagerPanel />
+          ) : activeApp?.id === "sovereign_studio" ? (
+            <SovereignStudioPanel />
           ) : !activeApp ? (
             <DesktopView onAppOpen={handleAppOpen} />
           ) : (
