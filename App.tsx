@@ -6,6 +6,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { GeneratedContent } from "./components/GeneratedContent";
 import { Icon } from "./components/Icon";
+import { ArchitectPanel } from "./components/ArchitectPanel";
 import { FileExplorerPanel } from "./components/FileExplorerPanel";
 import { GitHubManagerPanel } from "./components/GitHubManagerPanel";
 import { ParametersPanel } from "./components/ParametersPanel";
@@ -676,6 +677,8 @@ const App: React.FC = () => {
             <FileExplorerPanel />
           ) : activeApp?.id === "github_manager" ? (
             <GitHubManagerPanel />
+          ) : activeApp?.id === "architect_app" ? (
+            <ArchitectPanel />
           ) : !activeApp ? (
             <DesktopView onAppOpen={handleAppOpen} />
           ) : (
