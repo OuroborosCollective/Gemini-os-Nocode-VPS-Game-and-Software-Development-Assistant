@@ -14,6 +14,7 @@ export const APP_DEFINITIONS_CONFIG: AppDefinition[] = [
     icon: "🐙",
     color: "#e0e0e0",
   },
+  { id: "architect_app", name: "Architect", icon: "✨", color: "#f3e8ff" },
   { id: "ai_tools_app", name: "AI Tools", icon: "🤖", color: "#e0f2f1" },
   { id: "ai_skills_app", name: "AI Skills", icon: "🧠", color: "#fff9c4" },
   { id: "notepad_app", name: "Notepad", icon: "📝", color: "#fffde7" },
