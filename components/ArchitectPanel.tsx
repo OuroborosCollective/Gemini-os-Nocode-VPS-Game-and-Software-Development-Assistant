@@ -26,7 +26,7 @@ interface ArchitectPlanItem {
 }
 
 export const ArchitectPanel: React.FC = () => {
-  const modelName = "gemini-2.0-flash-exp";
+  const modelName = "gemini-2.5-flash-preview-09-2025";
   // In Vite, process.env is replaced by define in config.
   // We use a fallback to empty string if not defined.
   const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || "";
@@ -316,12 +316,15 @@ export const ArchitectPanel: React.FC = () => {
     }
   };
 
-  const handleAIAction = async (action: string, sysPrompt: string, options: { isCodeUpdate?: boolean, newExtension?: string, outputFilename?: string } = {}) => {
-    if (!currentFileContent && !options.outputFilename) return;
+  const handleAIAction = async (action: string, sysPrompt: string, options: { isCodeUpdate?: boolean, newExtension?: string, outputFilename?: string, customContext?: string } = {}) => {
+    if (!currentFileContent && !options.outputFilename && !options.customContext) return;
     logToSystem(`✨ <b>Führe ${action} für ${currentFile}... durch</b>`, "info");
     if (!options.isCodeUpdate) setActiveTab("chat");
     try {
-      let response = await callGeminiAPI(`Datei: ${currentFile}\n\nCode:\n${currentFileContent}`, sysPrompt);
+      const prompt = options.customContext
+        ? `${options.customContext}\n\nAktuelle Datei: ${currentFile}\n\nCode:\n${currentFileContent}`
+        : `Datei: ${currentFile}\n\nCode:\n${currentFileContent}`;
+      let response = await callGeminiAPI(prompt, sysPrompt);
 
       if (options.isCodeUpdate || options.newExtension || options.outputFilename) {
         response = response.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
@@ -360,11 +363,15 @@ export const ArchitectPanel: React.FC = () => {
     if (!currentFileContent) return;
     logToSystem(`✨ <b>Generiere Audio-Erklärung für ${currentFile}...</b>`, "info");
     try {
-      const textPrompt = `Fasse den Zweck der Datei ${currentFile} in maximal 3 kurzen Sätzen prägnant auf Deutsch zusammen.`;
-      const spokenText = await callGeminiAPI(textPrompt + `\n\nCode:\n${currentFileContent.substring(0, 2000)}`, "Du bist ein KI-Assistent. Antworte nur mit dem vorzulesenden Text, ohne Markdown.");
+      // 1. Generate a brief spoken summary using the standard text model
+      const textPrompt = `Fasse den Zweck der Datei ${currentFile} in maximal 3 kurzen Sätzen prägnant auf Deutsch zusammen. Formuliere es so, als würdest du es jemandem flüssig vorlesen.`;
+      const scriptSys = "Du bist ein KI-Assistent. Antworte nur mit dem vorzulesenden Text, ohne Markdown.";
+      const spokenText = await callGeminiAPI(textPrompt + `\n\nCode:\n${currentFileContent.substring(0, 2000)}`, scriptSys);
+
       logToSystem(`<i>🎙️ " ${spokenText} "</i>`, "info");
 
-      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
+      // 2. Call the Gemini TTS API
+      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
       const ttsResponse = await fetch(ttsUrl, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -372,7 +379,8 @@ export const ArchitectPanel: React.FC = () => {
           generationConfig: {
             responseModalities: ["AUDIO"],
             speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } } }
-          }
+          },
+          model: "gemini-2.5-flash-preview-tts"
         })
       });
 
@@ -498,7 +506,7 @@ export const ArchitectPanel: React.FC = () => {
           <div className="p-3 bg-stone-100 border-b border-stone-200 text-[10px] font-bold uppercase text-stone-500 flex justify-between shrink-0">
             <span>📁 Projekt: {repoName}</span>
             <div className="flex gap-2">
-              <button onClick={() => handleAIAction("Auto-README", "Generiere eine professionelle README.md. Antworte NUR mit dem Inhalt.", { outputFilename: "README.md" })} className="hover:text-purple-600 transition-colors">✨ Auto-README</button>
+              <button onClick={() => handleAIAction("Auto-README", "Du bist ein technischer Projektmanager. Generiere basierend auf der Liste der Dateipfade eine professionelle, ausführliche 'README.md' für dieses Projekt auf Deutsch. Sie sollte Projekt-Titel, Beschreibung, angenommene Features, Installationshinweise und Struktur enthalten. Antworte NUR mit dem Inhalt der README.md Datei, ohne Markdown Code-Fences drumherum.", { outputFilename: "README.md", customContext: `Dateibaum:\n${fullTree.slice(0, 100).map(f => f.path).join('\n')}` })} className="hover:text-purple-600 transition-colors">✨ Auto-README</button>
               <button onClick={fetchRepoTree} className="hover:text-stone-800">🔄 Refresh</button>
             </div>
           </div>
@@ -528,7 +536,7 @@ export const ArchitectPanel: React.FC = () => {
             {fullTree.length === 0 ? (
               <div className="p-4 text-xs italic text-stone-400">Lade Repository...</div>
             ) : (
-              fullTree.map(file => (
+              fullTree.slice(0, 150).map(file => (
                 <div
                   key={file.path}
                   onClick={() => handleSelectFile(file.path)}
@@ -549,31 +557,31 @@ export const ArchitectPanel: React.FC = () => {
               <span className="text-[11px] font-mono text-stone-600 italic mr-2 truncate max-w-[150px]">{currentFile}</span>
               {currentFile !== "Keine Datei gewählt" && (
                 <>
-                  <button onClick={() => handleAIAction("Review", "Senior Code Reviewer. Analysiere Bugs/Security. HTML.")} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Analyze</button>
-                  <button onClick={() => handleAIAction("Explain", "Mentor. Erkläre Code. HTML.")} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Explain</button>
+                  <button onClick={() => handleAIAction("Review", "Du bist ein strenger Senior Code Reviewer. Analysiere den folgenden Code. 1. Nenne kurze Stärken. 2. Liste potenzielle Bugs, Sicherheitslücken oder Performance-Probleme auf. 3. Mache 1-2 konkrete Architektur/Clean-Code Vorschläge. Antworte in kurzem, leicht lesbarem HTML (nutze <b>, <ul>, <li>, <code>). Keine Markdown-Blöcke.")} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Analyze</button>
+                  <button onClick={() => handleAIAction("Explain", "Du bist ein erfahrener technischer Mentor. Erkläre den folgenden Code in klarem, einfachem Deutsch. Fasse zusammen, was die Datei tut, welche Hauptfunktionen es gibt und wie sie funktionieren. Antworte in gut formatiertem HTML (nutze <b>, <ul>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Explain</button>
                   <button onClick={handleVoiceExplain} className="shrink-0 text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200 font-bold shadow-sm transition-all">✨ Voice Explain</button>
                   <button onClick={() => {
                       const lang = prompt("Zielsprache (python, rust, go, javascript, typescript)?");
-                      if (lang) handleAIAction("Translate", `Übersetze nach ${lang}. NUR CODE.`, { newExtension: lang });
+                      if (lang) handleAIAction("Translate", `Du bist ein Expert Developer. Übersetze den folgenden Code in ${lang}. Erhalte die exakte Logik bei. Gib NUR den reinen übersetzten Code zurück, ohne Markdown-Blöcke.`, { newExtension: lang });
                   }} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Translate</button>
-                  <button onClick={() => handleAIAction("Refactor", "Clean Code. Refaktorisiere. NUR CODE.", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Refactor</button>
-                  <button onClick={() => handleAIAction("Auto-Fix", "Debugge und behebe Fehler. NUR CODE.", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 font-bold shadow-sm transition-all">✨ Auto-Fix</button>
-                  <button onClick={() => handleAIAction("Big-O", "Analysiere Time/Space Complexity. HTML.")} className="shrink-0 text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 font-bold shadow-sm transition-all">✨ Big-O</button>
-                  <button onClick={() => handleAIAction("Diagram", "Erstelle Mermaid Diagramm in Markdown. NUR MARKDOWN.", { newExtension: "md" })} className="shrink-0 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-200 font-bold shadow-sm transition-all">✨ Diagram</button>
-                  <button onClick={() => handleAIAction("Security", "Security Experte. OWASP Scan. HTML.")} className="shrink-0 text-[10px] bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 font-bold shadow-sm transition-all">✨ Security</button>
-                  <button onClick={() => handleAIAction("Mock Data", "Generiere 5 Mock-Objekte als JSON. NUR JSON.", { newExtension: "json" })} className="shrink-0 text-[10px] bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200 font-bold shadow-sm transition-all">✨ Mock Data</button>
-                  <button onClick={() => handleAIAction("A11y", "WCAG Experte. Prüfe A11y. HTML.")} className="shrink-0 text-[10px] bg-teal-100 text-teal-700 px-2 py-1 rounded hover:bg-teal-200 font-bold shadow-sm transition-all">✨ A11y</button>
-                  <button onClick={() => handleAIAction("i18n", "Extrahiere Strings als JSON. NUR JSON.", { newExtension: "json" })} className="shrink-0 text-[10px] bg-yellow-100 text-yellow-700 px-2 py-1 rounded hover:bg-yellow-200 font-bold shadow-sm transition-all">✨ i18n</button>
-                  <button onClick={() => handleAIAction("cURL API", "Generiere cURL Befehle in Markdown. NUR MARKDOWN.", { newExtension: "md" })} className="shrink-0 text-[10px] bg-cyan-100 text-cyan-700 px-2 py-1 rounded hover:bg-cyan-200 font-bold shadow-sm transition-all">✨ cURL API</button>
-                  <button onClick={() => handleAIAction("Tailwind", "Konvertiere Styles zu Tailwind. NUR CODE.", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-sky-100 text-sky-700 px-2 py-1 rounded hover:bg-sky-200 font-bold shadow-sm transition-all">✨ Tailwind</button>
-                  <button onClick={() => handleAIAction("Dockerize", "Generiere Dockerfile. NUR CODE.", { outputFilename: "Dockerfile" })} className="shrink-0 text-[10px] bg-slate-100 text-slate-700 px-2 py-1 rounded hover:bg-slate-200 font-bold shadow-sm transition-all">✨ Dockerize</button>
-                  <button onClick={() => handleAIAction("SEO Audit", "SEO Experte. Analysiere Meta/Semantik. HTML.")} className="shrink-0 text-[10px] bg-fuchsia-100 text-fuchsia-700 px-2 py-1 rounded hover:bg-fuchsia-200 font-bold shadow-sm transition-all">✨ SEO Audit</button>
-                  <button onClick={() => handleAIAction("SQL Schema", "SQL Experte. Generiere Schema (Postgres). NUR SQL.", { newExtension: "sql" })} className="shrink-0 text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded hover:bg-amber-200 font-bold shadow-sm transition-all">✨ SQL Schema</button>
-                  <button onClick={() => handleAIAction("TS Types", "TS Experte. Generiere Interfaces. NUR CODE.", { newExtension: "ts" })} className="shrink-0 text-[10px] bg-lime-100 text-lime-700 px-2 py-1 rounded hover:bg-lime-200 font-bold shadow-sm transition-all">✨ TS Types</button>
-                  <button onClick={() => handleAIAction("CI/CD", "DevOps. Generiere GitHub Actions. NUR YAML.", { outputFilename: ".github/workflows/main.yml" })} className="shrink-0 text-[10px] bg-rose-100 text-rose-700 px-2 py-1 rounded hover:bg-rose-200 font-bold shadow-sm transition-all">✨ CI/CD</button>
-                  <button onClick={() => handleAIAction("Tutorial", "Blogger. Schreibe Tutorial in Markdown. NUR MARKDOWN.", { newExtension: "md" })} className="shrink-0 text-[10px] bg-violet-100 text-violet-700 px-2 py-1 rounded hover:bg-violet-200 font-bold shadow-sm transition-all">✨ Tutorial</button>
-                  <button onClick={() => handleAIAction("Docs", "Füge JSDoc Kommentare hinzu. NUR CODE.", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Docs</button>
-                  <button onClick={() => handleAIAction("Tests", "Schreibe Unit-Tests. NUR CODE.", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Tests</button>
+                  <button onClick={() => handleAIAction("Refactor", "Du bist ein Clean Code Experte. Refaktorisiere den Code. Optimiere die Performance, verbessere die Lesbarkeit und wende moderne Best Practices (z.B. ES6+, SOLID) an. Verändere nicht die Kernlogik. Gib NUR den vollständigen, optimierten Code zurück (kein Markdown drumherum, nur Raw Code).", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Refactor</button>
+                  <button onClick={() => handleAIAction("Auto-Fix", "Du bist ein meisterhafter Debugger. Finde Syntax-Fehler, logische Lücken oder veraltete API-Aufrufe im Code und BEHEBE sie. Verändere nicht die Kern-Architektur, mache den Code nur lauffähig und fehlerfrei. Gib NUR den reparierten Code zurück, absolut kein Markdown, keine Erklärungen.", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 font-bold shadow-sm transition-all">✨ Auto-Fix</button>
+                  <button onClick={() => handleAIAction("Big-O", "Du bist ein Informatik-Professor. Analysiere die Zeitkomplexität (Time Complexity) und Platzkomplexität (Space Complexity) im Big-O Format für die Hauptfunktionen im folgenden Code. Gib an, wo der Flaschenhals liegt und wie man ihn optimieren könnte. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 font-bold shadow-sm transition-all">✨ Big-O</button>
+                  <button onClick={() => handleAIAction("Diagram", "Du bist ein Software-Architekt. Erstelle ein Mermaid.js Diagramm (z.B. Flowchart oder Class Diagram), das den Ablauf und die Struktur des folgenden Codes visuell darstellt. Gib NUR den Mermaid-Code zurück, eingebettet in einem Markdown-Block: ```mermaid\n[DEIN CODE]\n```. Wrappe das Ganze in ein Markdown-Dokument.", { newExtension: "md" })} className="shrink-0 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-200 font-bold shadow-sm transition-all">✨ Diagram</button>
+                  <button onClick={() => handleAIAction("Security", "Du bist ein erfahrener White-Hat Hacker und Cyber-Security Experte. Analysiere den folgenden Code auf gängige Schwachstellen (z.B. OWASP Top 10, Injection, XSS, ungesicherte APIs, Secrets im Code). Gib konkrete Warnungen und Lösungsvorschläge. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul class='list-disc pl-4'>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 font-bold shadow-sm transition-all">✨ Security</button>
+                  <button onClick={() => handleAIAction("Mock Data", "Du bist ein Backend-Entwickler. Analysiere den Code (Modelle, Interfaces, Variablen oder UI-Komponenten) und generiere dazu passende, extrem realistische Mock-Daten als JSON-Array mit 5 detaillierten Objekten. Gib AUSSCHLIESSLICH das nackte JSON zurück, ohne Markdown-Fences drumherum.", { newExtension: "json" })} className="shrink-0 text-[10px] bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200 font-bold shadow-sm transition-all">✨ Mock Data</button>
+                  <button onClick={() => handleAIAction("A11y", "Du bist ein Experte für Web Accessibility (WCAG). Analysiere den folgenden Code (insbesondere HTML, JSX, TSX) auf Barrierefreiheit. Prüfe auf fehlende ARIA-Labels, schlechte Kontraste, Tastaturnavigation und Alt-Texte. Gib konkrete Verbesserungsvorschläge. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul class='list-disc pl-4'>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-teal-100 text-teal-700 px-2 py-1 rounded hover:bg-teal-200 font-bold shadow-sm transition-all">✨ A11y</button>
+                  <button onClick={() => handleAIAction("i18n", "Du bist ein Frontend-Architekt. Analysiere den Code und extrahiere alle hartcodierten, nutzersichtbaren Texte (Strings). Generiere eine JSON-Datei mit Key-Value-Paaren (Keys in UPPER_SNAKE_CASE, Values sind die Originaltexte). Gib AUSSCHLIESSLICH das validierte JSON zurück, absolut kein Markdown drumherum.", { newExtension: "json" })} className="shrink-0 text-[10px] bg-yellow-100 text-yellow-700 px-2 py-1 rounded hover:bg-yellow-200 font-bold shadow-sm transition-all">✨ i18n</button>
+                  <button onClick={() => handleAIAction("cURL API", "Du bist ein API-Spezialist. Analysiere diesen Code auf API-Endpunkte (z.B. REST-Routen, Controller, Fetch-Aufrufe). Generiere ein strukturiertes Markdown-Dokument mit realistischen, kopierbaren `curl`-Befehlen zum Testen dieser Endpunkte (inklusive nötiger JSON-Bodys und Headers). Gib NUR Markdown zurück, ohne Fences drumherum.", { newExtension: "md" })} className="shrink-0 text-[10px] bg-cyan-100 text-cyan-700 px-2 py-1 rounded hover:bg-cyan-200 font-bold shadow-sm transition-all">✨ cURL API</button>
+                  <button onClick={() => handleAIAction("Tailwind", "Du bist ein Frontend UI/UX Experte. Konvertiere das Styling dieses Codes (z.B. standard CSS, Inline-Styles, alte Frameworks) in moderne Tailwind CSS Utility-Klassen. Ändere nicht die Kernlogik, überarbeite nur die Klassen/Styles. Gib NUR den vollständigen, umgeschriebenen Code zurück (kein Markdown drumherum).", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-sky-100 text-sky-700 px-2 py-1 rounded hover:bg-sky-200 font-bold shadow-sm transition-all">✨ Tailwind</button>
+                  <button onClick={() => handleAIAction("Dockerize", "Du bist ein DevOps Engineer. Analysiere die Dateipfade des Repositories und den Code der aktuell geöffneten Datei, um den Tech-Stack zu erraten. Generiere ein professionelles, multi-stage, produktionsbereites 'Dockerfile'. Gib AUSSCHLIESSLICH den Inhalt des Dockerfiles zurück, ohne Markdown-Fences drumherum.", { outputFilename: "Dockerfile", customContext: `Dateibaum:\n${fullTree.slice(0, 100).map(f => f.path).join('\n')}` })} className="shrink-0 text-[10px] bg-slate-100 text-slate-700 px-2 py-1 rounded hover:bg-slate-200 font-bold shadow-sm transition-all">✨ Dockerize</button>
+                  <button onClick={() => handleAIAction("SEO Audit", "Du bist ein SEO-Experte. Analysiere diesen Code (HTML, JSX, TSX, etc.) auf SEO-Best-Practices. Prüfe auf fehlende Meta-Tags, Title-Tags, semantisches HTML (h1-h6), Alt-Attribute und Open Graph Daten. Zeige auf, was gut ist und was fehlt. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul class='list-disc pl-4'>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-fuchsia-100 text-fuchsia-700 px-2 py-1 rounded hover:bg-fuchsia-200 font-bold shadow-sm transition-all">✨ SEO Audit</button>
+                  <button onClick={() => handleAIAction("SQL Schema", "Du bist ein Database Administrator. Analysiere den Code (Interfaces, Klassen, Structs, ORM-Modelle, JSON-Daten) und generiere das entsprechende SQL-Schema (PostgreSQL) mit CREATE TABLE Statements, korrekten Datentypen, Primary Keys und Foreign Keys. Gib AUSSCHLIESSLICH den rohen SQL-Code zurück, ohne Markdown-Fences drumherum.", { newExtension: "sql" })} className="shrink-0 text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded hover:bg-amber-200 font-bold shadow-sm transition-all">✨ SQL Schema</button>
+                  <button onClick={() => handleAIAction("TS Types", "Du bist ein TypeScript-Experte. Analysiere das übergebene JSON, JavaScript oder die ungetypten Strukturen und generiere strikte, professionell benannte TypeScript Interfaces und Types dafür. Gib AUSSCHLIESSLICH den rohen TypeScript-Code zurück, ohne Markdown-Fences drumherum.", { newExtension: "ts" })} className="shrink-0 text-[10px] bg-lime-100 text-lime-700 px-2 py-1 rounded hover:bg-lime-200 font-bold shadow-sm transition-all">✨ TS Types</button>
+                  <button onClick={() => handleAIAction("CI/CD", "Du bist ein DevOps Architekt. Analysiere den Dateibaum, um den Tech-Stack zu erkennen. Schreibe eine professionelle GitHub Actions CI/CD Pipeline (`main.yml`), die den Code auscheckt, Abhängigkeiten installiert, Tests ausführt und das Projekt baut. Gib AUSSCHLIESSLICH den rohen YAML-Code zurück, ohne Markdown-Fences.", { outputFilename: ".github/workflows/main.yml", customContext: `Dateibaum:\n${fullTree.slice(0, 100).map(f => f.path).join('\n')}` })} className="shrink-0 text-[10px] bg-rose-100 text-rose-700 px-2 py-1 rounded hover:bg-rose-200 font-bold shadow-sm transition-all">✨ CI/CD</button>
+                  <button onClick={() => handleAIAction("Tutorial", "Du bist ein Developer Advocate und Tech-Blogger. Schreibe ein gut strukturiertes Markdown-Tutorial (wie einen Medium- oder Dev.to-Artikel), das den übergebenen Code Schritt für Schritt erklärt. Gliedere in Einleitung, Code-Walkthrough und Fazit. Gib AUSSCHLIESSLICH Markdown-Text zurück, ohne umschließende Fences für die ganze Antwort.", { newExtension: "md" })} className="shrink-0 text-[10px] bg-violet-100 text-violet-700 px-2 py-1 rounded hover:bg-violet-200 font-bold shadow-sm transition-all">✨ Tutorial</button>
+                  <button onClick={() => handleAIAction("Docs", "Du bist ein Senior Developer. Füge dem folgenden Code professionelle JSDoc/Docstrings und hilfreiche Inline-Kommentare hinzu. Verändere NICHTS an der Logik. Gib NUR den vollständigen, kommentierten Code zurück (kein Markdown, nur reiner Code).", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Docs</button>
+                  <button onClick={() => handleAIAction("Tests", "Du bist ein QA Engineer. Schreibe ausführliche Unit-Tests (Jest/Mocha Stil) für den folgenden Code. Gib NUR den vollständigen Test-Code zurück (kein Markdown drumherum, nur Raw Code).", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Tests</button>
                 </>
               )}
             </div>
