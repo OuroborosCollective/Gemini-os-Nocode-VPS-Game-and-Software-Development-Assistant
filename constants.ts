@@ -19,6 +19,7 @@ export const APP_DEFINITIONS_CONFIG: AppDefinition[] = [
   { id: "ai_skills_app", name: "AI Skills", icon: "🧠", color: "#fff9c4" },
   { id: "notepad_app", name: "Notepad", icon: "📝", color: "#fffde7" },
   { id: "settings_app", name: "Settings", icon: "⚙️", color: "#e7f3ff" },
+  { id: "n9w", name: "N9w", icon: "✨", color: "#f3e8ff" },
 ];
 
 export const INITIAL_MAX_HISTORY_LENGTH = 10;
