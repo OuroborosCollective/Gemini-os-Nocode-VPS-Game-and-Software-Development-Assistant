@@ -62,10 +62,9 @@ const THEMES: Record<string, { text: string; line: string }> = {
   Compiler: { text: "text-purple-100", line: "text-purple-600" },
 };
 
-export const ArchitectPanel: React.FC = () => {
+export const N9wPanel: React.FC = () => {
   const modelName = "gemini-2.0-flash-exp";
   // In Vite, process.env is replaced by define in config.
-  // We use a fallback to empty string if not defined.
   const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || "";
 
   const [ghPat, setGhPat] = useState("");
@@ -79,7 +78,7 @@ export const ArchitectPanel: React.FC = () => {
   const [currentFileContent, setCurrentFileContent] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([
     {
-      text: "<strong>Architect API geladen.</strong><br>Gib oben deinen GitHub PAT ein. Füge einen Blueprint aus deinen PDFs links in das Feld ein. Ich zerlege das Projekt in Einzelschritte, programmiere alle Dateien durch und pushe sie über die REST API als ein großes Modul.",
+      text: "<strong>N9w Architect geladen.</strong><br>Gib oben deinen GitHub PAT ein. Füge einen Blueprint aus deinen PDFs links in das Feld ein. Ich zerlege das Projekt in Einzelschritte, programmiere alle Dateien durch und pushe sie über die REST API als ein großes Modul.",
       type: "info"
     }
   ]);
@@ -103,8 +102,6 @@ export const ArchitectPanel: React.FC = () => {
   }, [logs, scrollToBottom]);
 
   const logToSystem = (text: string, type: LogEntry["type"] = "info") => {
-    // Sanitize basic tags we expect from LLM but prevent others if needed.
-    // For now, trusting the internal log generator but using dangerouslySetInnerHTML requires caution.
     setLogs(prev => [...prev, { text, type }]);
     if (type === "error" && window.innerWidth < 1024) {
       setActiveTab("chat");
@@ -113,7 +110,7 @@ export const ArchitectPanel: React.FC = () => {
 
   const callGeminiAPI = async (prompt: string, system: string, customModel?: string) => {
     if (!apiKey) {
-        throw new Error("GEMINI_API_KEY is not set. Please check your environment variables.");
+        throw new Error("GEMINI_API_KEY is not set.");
     }
     const targetModel = customModel || modelName;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
@@ -184,7 +181,7 @@ export const ArchitectPanel: React.FC = () => {
   const runArchitect = async () => {
     if (!architectInput.trim()) return;
     setIsRouting(true);
-    logToSystem("<b>Architekt analysiert Blueprint...</b><br>Erstelle Projektplan.", "info");
+    logToSystem("<b>N9w Architekt analysiert Blueprint...</b><br>Erstelle Projektplan.", "info");
     setActiveTab("chat");
 
     try {
@@ -422,14 +419,12 @@ export const ArchitectPanel: React.FC = () => {
     if (!currentFileContent) return;
     logToSystem(`✨ <b>Generiere Audio-Erklärung für ${currentFile}...</b>`, "info");
     try {
-      // 1. Generate a brief spoken summary using the standard text model
       const textPrompt = `Fasse den Zweck der Datei ${currentFile} in maximal 3 kurzen Sätzen prägnant auf Deutsch zusammen. Formuliere es so, als würdest du es jemandem flüssig vorlesen.`;
       const scriptSys = "Du bist ein KI-Assistent. Antworte nur mit dem vorzulesenden Text, ohne Markdown.";
       const spokenText = await callGeminiAPI(textPrompt + `\n\nCode:\n${currentFileContent.substring(0, 2000)}`, scriptSys);
 
       logToSystem(`<i>🎙️ " ${spokenText} "</i>`, "info");
 
-      // 2. Call the Gemini TTS API
       const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
       const ttsResponse = await fetch(ttsUrl, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -525,7 +520,7 @@ export const ArchitectPanel: React.FC = () => {
       <header className="h-14 bg-white border-b border-stone-200 flex items-center justify-between px-4 shrink-0 shadow-sm z-50">
         <div>
           <h1 className="text-sm font-bold tracking-tight">SOVEREIGN<span className="text-purple-600">_STUDIO</span></h1>
-          <div className="text-[9px] font-bold text-purple-600 uppercase tracking-widest">Architect Edition v2.0</div>
+          <div className="text-[9px] font-bold text-purple-600 uppercase tracking-widest">N9w Architect Edition v2.0</div>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex flex-col gap-0.5">
@@ -572,7 +567,7 @@ export const ArchitectPanel: React.FC = () => {
 
           <div className="p-3 bg-purple-50 border-b border-purple-200 shrink-0">
             <div className="flex justify-between items-center mb-2">
-              <h3 className="text-[11px] font-bold text-purple-800">⚡ ARCHITECT BLUEPRINT</h3>
+              <h3 className="text-[11px] font-bold text-purple-800">⚡ N9W BLUEPRINT</h3>
               <button onClick={handleExpandBlueprint} className="text-[9px] font-bold bg-purple-200 text-purple-800 px-2 py-0.5 rounded hover:bg-purple-300 transition-colors shadow-sm">✨ Expand Idea</button>
             </div>
             <textarea
@@ -599,7 +594,7 @@ export const ArchitectPanel: React.FC = () => {
                 <div
                   key={file.path}
                   onClick={() => handleSelectFile(file.path)}
-                  className={`architect-file-tree-item ${currentFile === file.path ? "active-file" : ""}`}
+                  className={`n9w-file-tree-item ${currentFile === file.path ? "active-file" : ""}`}
                 >
                   <span className="shrink-0 text-stone-400">📄</span>
                   <span className="truncate">{file.path}</span>
@@ -650,7 +645,7 @@ export const ArchitectPanel: React.FC = () => {
           </div>
 
           <div className="flex-1 bg-stone-100/30 p-2 lg:p-4 overflow-hidden flex flex-col">
-            <div className="architect-editor-bg flex-1 rounded-xl shadow-inner relative overflow-hidden flex flex-col">
+            <div className="n9w-editor-bg flex-1 rounded-xl shadow-inner relative overflow-hidden flex flex-col">
               <div className="flex-1 overflow-auto p-3 text-[12px] text-stone-300 whitespace-pre custom-scrollbar">
                 {isLoadingFile ? (
                   <div className="text-stone-500 italic">Lade {currentFile}...</div>
@@ -662,14 +657,14 @@ export const ArchitectPanel: React.FC = () => {
 
                     const { text: textColor, line: lineNumberColor } = THEMES[theme] || THEMES.Review;
                     return (
-                      <div key={idx} className="architect-code-line">
-                        <span className={`architect-line-number ${lineNumberColor}`}>{idx + 1}</span>
+                      <div key={idx} className="n9w-code-line">
+                        <span className={`n9w-line-number ${lineNumberColor}`}>{idx + 1}</span>
                         <span className={textColor}>{line}</span>
                       </div>
                     );
                   })
                 ) : (
-                  <div className="text-stone-500 italic">// Bereit für Architekten-Aufträge...</div>
+                  <div className="text-stone-500 italic">// Bereit für N9W-Aufträge...</div>
                 )}
               </div>
             </div>
