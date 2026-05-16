@@ -63,9 +63,7 @@ const THEMES: Record<string, { text: string; line: string }> = {
 };
 
 export const ArchitectPanel: React.FC = () => {
-  const modelName = "gemini-2.5-flash-preview-09-2025";
-  // In Vite, process.env is replaced by define in config.
-  // We use a fallback to empty string if not defined.
+  const modelName = "gemini-2.0-flash-exp";
   const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || "";
 
   const [ghPat, setGhPat] = useState("");
@@ -102,10 +100,15 @@ export const ArchitectPanel: React.FC = () => {
     scrollToBottom();
   }, [logs, scrollToBottom]);
 
+  const sanitizeHtml = (html: string) => {
+    return html
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+      .replace(/on\w+="[^"]*"/gi, "")
+      .replace(/on\w+='[^']*'/gi, "");
+  };
+
   const logToSystem = (text: string, type: LogEntry["type"] = "info") => {
-    // Sanitize basic tags we expect from LLM but prevent others if needed.
-    // For now, trusting the internal log generator but using dangerouslySetInnerHTML requires caution.
-    setLogs(prev => [...prev, { text, type }]);
+    setLogs(prev => [...prev, { text: sanitizeHtml(text), type }]);
     if (type === "error" && window.innerWidth < 1024) {
       setActiveTab("chat");
     }
@@ -422,15 +425,13 @@ export const ArchitectPanel: React.FC = () => {
     if (!currentFileContent) return;
     logToSystem(`✨ <b>Generiere Audio-Erklärung für ${currentFile}...</b>`, "info");
     try {
-      // 1. Generate a brief spoken summary using the standard text model
       const textPrompt = `Fasse den Zweck der Datei ${currentFile} in maximal 3 kurzen Sätzen prägnant auf Deutsch zusammen. Formuliere es so, als würdest du es jemandem flüssig vorlesen.`;
       const scriptSys = "Du bist ein KI-Assistent. Antworte nur mit dem vorzulesenden Text, ohne Markdown.";
       const spokenText = await callGeminiAPI(textPrompt + `\n\nCode:\n${currentFileContent.substring(0, 2000)}`, scriptSys);
 
       logToSystem(`<i>🎙️ " ${spokenText} "</i>`, "info");
 
-      // 2. Call the Gemini TTS API
-      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
       const ttsResponse = await fetch(ttsUrl, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -439,7 +440,7 @@ export const ArchitectPanel: React.FC = () => {
             responseModalities: ["AUDIO"],
             speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } } }
           },
-          model: "gemini-2.5-flash-preview-tts"
+          model: modelName
         })
       });
 
@@ -548,8 +549,9 @@ export const ArchitectPanel: React.FC = () => {
             type="password"
             value={ghPat}
             onChange={e => setGhPat(e.target.value)}
-            placeholder="GitHub PAT"
-            className="text-xs px-2 py-1 border border-stone-300 rounded w-40 focus:outline-none focus:border-purple-500"
+            placeholder="GitHub PAT (repo scope!)"
+            title="Braucht 'repo' Berechtigung für Private Repos"
+            className="text-xs px-2 py-1 border border-stone-300 rounded w-48 focus:outline-none focus:border-purple-500"
           />
           {isRouting && (
             <div className="text-[10px] font-bold text-purple-600 flex items-center gap-1">
@@ -565,7 +567,7 @@ export const ArchitectPanel: React.FC = () => {
           <div className="p-3 bg-stone-100 border-b border-stone-200 text-[10px] font-bold uppercase text-stone-500 flex justify-between shrink-0">
             <span>📁 Projekt: {repoName}</span>
             <div className="flex gap-2">
-              <button onClick={() => handleAIAction("Auto-README", "Du bist ein technischer Projektmanager. Generiere basierend auf der Liste der Dateipfade eine professionelle, ausführliche 'README.md' für dieses Projekt auf Deutsch. Sie sollte Projekt-Titel, Beschreibung, angenommene Features, Installationshinweise und Struktur enthalten. Antworte NUR mit dem Inhalt der README.md Datei, ohne Markdown Code-Fences drumherum.", { outputFilename: "README.md", useTreeContext: true })} className="hover:text-purple-600 transition-colors">✨ Auto-README</button>
+              <button id="btn-auto-readme" onClick={() => handleAIAction("Auto-README", "Du bist ein technischer Projektmanager. Generiere basierend auf der Liste der Dateipfade eine professionelle, ausführliche 'README.md' für dieses Projekt auf Deutsch. Sie sollte Projekt-Titel, Beschreibung, angenommene Features, Installationshinweise und Struktur enthalten. Antworte NUR mit dem Inhalt der README.md Datei, ohne Markdown Code-Fences drumherum.", { outputFilename: "README.md", useTreeContext: true })} className="hover:text-purple-600 transition-colors" title="README.md aus Projektstruktur generieren">✨ Auto-README</button>
               <button onClick={fetchRepoTree} className="hover:text-stone-800">🔄 Refresh</button>
             </div>
           </div>
@@ -580,7 +582,7 @@ export const ArchitectPanel: React.FC = () => {
               onChange={e => setArchitectInput(e.target.value)}
               rows={4}
               className="w-full p-2 text-[11px] border border-purple-200 rounded focus:outline-none focus:border-purple-500 resize-none shadow-inner"
-              placeholder="Kopiere Modul-Texte aus dem PDF hierher..."
+              placeholder="Kopiere Modul-Texte aus dem PDF hierher. (z.B. 'Baue Modul 4: Retail-Heatmap...'). Der Architekt übernimmt."
             />
             <button
               onClick={runArchitect}
@@ -616,7 +618,7 @@ export const ArchitectPanel: React.FC = () => {
               <span className="text-[11px] font-mono text-stone-600 italic mr-2 truncate max-w-[150px]">{currentFile}</span>
               {currentFile !== "Keine Datei gewählt" && (
                 <>
-                  <button onClick={() => handleAIAction("Review", "Du bist ein strenger Senior Code Reviewer. Analysiere den folgenden Code. 1. Nenne kurze Stärken. 2. Liste potenzielle Bugs, Sicherheitslücken oder Performance-Probleme auf. 3. Mache 1-2 konkrete Architektur/Clean-Code Vorschläge. Antworte in kurzem, leicht lesbarem HTML (nutze <b>, <ul>, <li>, <code>). Keine Markdown-Blöcke.")} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Analyze</button>
+                  <button onClick={() => handleAIAction("Analyze", "Du bist ein strenger Senior Code Reviewer. Analysiere den folgenden Code. 1. Nenne kurze Stärken. 2. Liste potenzielle Bugs, Sicherheitslücken oder Performance-Probleme auf. 3. Mache 1-2 konkrete Architektur/Clean-Code Vorschläge. Antworte in kurzem, leicht lesbarem HTML (nutze <b>, <ul>, <li>, <code>). Keine Markdown-Blöcke.")} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Analyze</button>
                   <button onClick={() => handleAIAction("Explain", "Du bist ein erfahrener technischer Mentor. Erkläre den folgenden Code in klarem, einfachem Deutsch. Fasse zusammen, was die Datei tut, welche Hauptfunktionen es gibt und wie sie funktionieren. Antworte in gut formatiertem HTML (nutze <b>, <ul>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Explain</button>
                   <button onClick={handleVoiceExplain} className="shrink-0 text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200 font-bold shadow-sm transition-all">✨ Voice Explain</button>
                   <button onClick={() => {

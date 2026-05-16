@@ -100,8 +100,15 @@ export const N9wPanel: React.FC = () => {
     scrollToBottom();
   }, [logs, scrollToBottom]);
 
+  const sanitizeHtml = (html: string) => {
+    return html
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+      .replace(/on\w+="[^"]*"/gi, "")
+      .replace(/on\w+='[^']*'/gi, "");
+  };
+
   const logToSystem = (text: string, type: LogEntry["type"] = "info") => {
-    setLogs(prev => [...prev, { text, type }]);
+    setLogs(prev => [...prev, { text: sanitizeHtml(text), type }]);
     if (type === "error" && window.innerWidth < 1024) {
       setActiveTab("chat");
     }
@@ -542,8 +549,9 @@ export const N9wPanel: React.FC = () => {
             type="password"
             value={ghPat}
             onChange={e => setGhPat(e.target.value)}
-            placeholder="GitHub PAT"
-            className="text-xs px-2 py-1 border border-stone-300 rounded w-40 focus:outline-none focus:border-purple-500"
+            placeholder="GitHub PAT (repo scope!)"
+            title="Braucht 'repo' Berechtigung für Private Repos"
+            className="text-xs px-2 py-1 border border-stone-300 rounded w-48 focus:outline-none focus:border-purple-500"
           />
           {isRouting && (
             <div className="text-[10px] font-bold text-purple-600 flex items-center gap-1">
@@ -559,7 +567,7 @@ export const N9wPanel: React.FC = () => {
           <div className="p-3 bg-stone-100 border-b border-stone-200 text-[10px] font-bold uppercase text-stone-500 flex justify-between shrink-0">
             <span>📁 Projekt: {repoName}</span>
             <div className="flex gap-2">
-              <button onClick={() => handleAIAction("Auto-README", "Du bist ein technischer Projektmanager. Generiere basierend auf der Liste der Dateipfade eine professionelle, ausführliche 'README.md' für dieses Projekt auf Deutsch. Sie sollte Projekt-Titel, Beschreibung, angenommene Features, Installationshinweise und Struktur enthalten. Antworte NUR mit dem Inhalt der README.md Datei, ohne Markdown Code-Fences drumherum.", { outputFilename: "README.md", useTreeContext: true })} className="hover:text-purple-600 transition-colors">✨ Auto-README</button>
+              <button id="btn-auto-readme" onClick={() => handleAIAction("Auto-README", "Du bist ein technischer Projektmanager. Generiere basierend auf der Liste der Dateipfade eine professionelle, ausführliche 'README.md' für dieses Projekt auf Deutsch. Sie sollte Projekt-Titel, Beschreibung, angenommene Features, Installationshinweise und Struktur enthalten. Antworte NUR mit dem Inhalt der README.md Datei, ohne Markdown Code-Fences drumherum.", { outputFilename: "README.md", useTreeContext: true })} className="hover:text-purple-600 transition-colors" title="README.md aus Projektstruktur generieren">✨ Auto-README</button>
               <button onClick={fetchRepoTree} className="hover:text-stone-800">🔄 Refresh</button>
             </div>
           </div>
@@ -574,7 +582,7 @@ export const N9wPanel: React.FC = () => {
               onChange={e => setArchitectInput(e.target.value)}
               rows={4}
               className="w-full p-2 text-[11px] border border-purple-200 rounded focus:outline-none focus:border-purple-500 resize-none shadow-inner"
-              placeholder="Kopiere Modul-Texte aus dem PDF hierher..."
+              placeholder="Kopiere Modul-Texte aus dem PDF hierher. (z.B. 'Baue Modul 4: Retail-Heatmap...'). Der Architekt übernimmt."
             />
             <button
               onClick={runArchitect}
@@ -610,7 +618,7 @@ export const N9wPanel: React.FC = () => {
               <span className="text-[11px] font-mono text-stone-600 italic mr-2 truncate max-w-[150px]">{currentFile}</span>
               {currentFile !== "Keine Datei gewählt" && (
                 <>
-                  <button onClick={() => handleAIAction("Review", "Du bist ein strenger Senior Code Reviewer. Analysiere den folgenden Code. 1. Nenne kurze Stärken. 2. Liste potenzielle Bugs, Sicherheitslücken oder Performance-Probleme auf. 3. Mache 1-2 konkrete Architektur/Clean-Code Vorschläge. Antworte in kurzem, leicht lesbarem HTML (nutze <b>, <ul>, <li>, <code>). Keine Markdown-Blöcke.")} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Analyze</button>
+                  <button onClick={() => handleAIAction("Analyze", "Du bist ein strenger Senior Code Reviewer. Analysiere den folgenden Code. 1. Nenne kurze Stärken. 2. Liste potenzielle Bugs, Sicherheitslücken oder Performance-Probleme auf. 3. Mache 1-2 konkrete Architektur/Clean-Code Vorschläge. Antworte in kurzem, leicht lesbarem HTML (nutze <b>, <ul>, <li>, <code>). Keine Markdown-Blöcke.")} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Analyze</button>
                   <button onClick={() => handleAIAction("Explain", "Du bist ein erfahrener technischer Mentor. Erkläre den folgenden Code in klarem, einfachem Deutsch. Fasse zusammen, was die Datei tut, welche Hauptfunktionen es gibt und wie sie funktionieren. Antworte in gut formatiertem HTML (nutze <b>, <ul>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Explain</button>
                   <button onClick={handleVoiceExplain} className="shrink-0 text-[10px] bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200 font-bold shadow-sm transition-all">✨ Voice Explain</button>
                   <button onClick={() => {
@@ -620,9 +628,9 @@ export const N9wPanel: React.FC = () => {
                   <button onClick={() => handleAIAction("Refactor", "Du bist ein Clean Code Experte. Refaktorisiere den Code. Optimiere die Performance, verbessere die Lesbarkeit und wende moderne Best Practices (z.B. ES6+, SOLID) an. Verändere nicht die Kernlogik. Gib NUR den vollständigen, optimierten Code zurück (kein Markdown drumherum, nur Raw Code).", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Refactor</button>
                   <button onClick={() => handleAIAction("Auto-Fix", "Du bist ein meisterhafter Debugger. Finde Syntax-Fehler, logische Lücken oder veraltete API-Aufrufe im Code und BEHEBE sie. Verändere nicht die Kern-Architektur, mache den Code nur lauffähig und fehlerfrei. Gib NUR den reparierten Code zurück, absolut kein Markdown, keine Erklärungen.", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 font-bold shadow-sm transition-all">✨ Auto-Fix</button>
                   <button onClick={() => handleAIAction("Big-O", "Du bist ein Informatik-Professor. Analysiere die Zeitkomplexität (Time Complexity) und Platzkomplexität (Space Complexity) im Big-O Format für die Hauptfunktionen im folgenden Code. Gib an, wo der Flaschenhals liegt und wie man ihn optimieren könnte. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 font-bold shadow-sm transition-all">✨ Big-O</button>
-                  <button onClick={() => handleAIAction("Diagram", "Du bist ein Software-Architekt. Erstelle ein Mermaid.js Diagramm (z.B. Flowchart oder Class Diagram), das den Ablauf and die Struktur des folgenden Codes visuell darstellt. Gib NUR den Mermaid-Code zurück, eingebettet in einem Markdown-Block: ```mermaid\n[DEIN CODE]\n```", { newExtension: "md", suffix: "-diagram", wrapContent: (content) => `# Architektur: ${currentFile}\n\n${content}\n` })} className="shrink-0 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-200 font-bold shadow-sm transition-all">✨ Diagram</button>
+                  <button onClick={() => handleAIAction("Diagram", "Du bist ein Software-Architekt. Erstelle ein Mermaid.js Diagramm (z.B. Flowchart oder Class Diagram), das den Ablauf und die Struktur des folgenden Codes visuell darstellt. Gib NUR den Mermaid-Code zurück, eingebettet in einem Markdown-Block: ```mermaid\n[DEIN CODE]\n```", { newExtension: "md", suffix: "-diagram", wrapContent: (content) => `# Architektur: ${currentFile}\n\n${content}\n` })} className="shrink-0 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-200 font-bold shadow-sm transition-all">✨ Diagram</button>
                   <button onClick={() => handleAIAction("Security", "Du bist ein erfahrener White-Hat Hacker und Cyber-Security Experte. Analysiere den folgenden Code auf gängige Schwachstellen (z.B. OWASP Top 10, Injection, XSS, ungesicherte APIs, Secrets im Code). Gib konkrete Warnungen und Lösungsvorschläge. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul class='list-disc pl-4'>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 font-bold shadow-sm transition-all">✨ Security</button>
-                  <button onClick={() => handleAIAction("Mock Data", "Du bist ein Backend-Entwickler. Analysiere den Code (Modelle, Interfaces, Variablen oder UI-Komponenten) und generiere dazu passende, extrem realistische Mock-Daten als JSON-Array mit 5 detaillierten Objekten. Gib AUSSCHLIESSLICH das nackte JSON zurück, ohne Markdown-Fences drumherum.", { newExtension: "json", suffix: "_mock" })} className="shrink-0 text-[10px] bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200 font-bold shadow-sm transition-all">✨ Mock Data</button>
+                  <button onClick={() => handleAIAction("Mock Data", "Du bist ein Backend-Entwickler. Analysiere den Code (Modelle, Interfaces, Variablen oder UI-Komponenten) and generiere dazu passende, extrem realistische Mock-Daten als JSON-Array mit 5 detaillierten Objekten. Gib AUSSCHLIESSLICH das nackte JSON zurück, ohne Markdown-Fences drumherum.", { newExtension: "json", suffix: "_mock" })} className="shrink-0 text-[10px] bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200 font-bold shadow-sm transition-all">✨ Mock Data</button>
                   <button onClick={() => handleAIAction("A11y", "Du bist ein Experte für Web Accessibility (WCAG). Analysiere den folgenden Code (insbesondere HTML, JSX, TSX) auf Barrierefreiheit. Prüfe auf fehlende ARIA-Labels, schlechte Kontraste, Tastaturnavigation und Alt-Texte. Gib konkrete Verbesserungsvorschläge. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul class='list-disc pl-4'>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-teal-100 text-teal-700 px-2 py-1 rounded hover:bg-teal-200 font-bold shadow-sm transition-all">✨ A11y</button>
                   <button onClick={() => handleAIAction("i18n", "Du bist ein Frontend-Architekt. Analysiere den Code und extrahiere alle hartcodierten, nutzersichtbaren Texte (Strings). Generiere eine JSON-Datei mit Key-Value-Paaren (Keys in UPPER_SNAKE_CASE, Values sind die Originaltexte). Gib AUSSCHLIESSLICH das validierte JSON zurück, absolut kein Markdown drumherum.", { newExtension: "json", suffix: "_i18n" })} className="shrink-0 text-[10px] bg-yellow-100 text-yellow-700 px-2 py-1 rounded hover:bg-yellow-200 font-bold shadow-sm transition-all">✨ i18n</button>
                   <button onClick={() => handleAIAction("cURL API", "Du bist ein API-Spezialist. Analysiere diesen Code auf API-Endpunkte (z.B. REST-Routen, Controller, Fetch-Aufrufe). Generiere ein strukturiertes Markdown-Dokument mit realistischen, kopierbaren `curl`-Befehlen zum Testen dieser Endpunkte (inklusive nötiger JSON-Bodys und Headers). Gib NUR Markdown zurück, ohne Fences drumherum.", { newExtension: "md", suffix: "_endpoints" })} className="shrink-0 text-[10px] bg-cyan-100 text-cyan-700 px-2 py-1 rounded hover:bg-cyan-200 font-bold shadow-sm transition-all">✨ cURL API</button>
@@ -671,11 +679,12 @@ export const N9wPanel: React.FC = () => {
 
           <div className="h-16 border-t border-purple-200 px-4 flex items-center justify-between bg-purple-50 shrink-0 gap-4">
             <div className="truncate flex-1">
-              <h4 className="text-[10px] font-black text-purple-700 uppercase">GitOps Warteschlange</h4>
-              <p className="text-[10px] text-purple-600 italic truncate mb-1">{batchFiles.length} Dateien bereit für Massen-Commit.</p>
+              <h4 id="batch-status" className="text-[10px] font-black text-purple-700 uppercase">GitOps Warteschlange</h4>
+              <p id="batch-preview" className="text-[10px] text-purple-600 italic truncate mb-1">{batchFiles.length} Dateien bereit für Massen-Commit.</p>
               <div className="flex gap-2 items-center">
                 <input
                   type="text"
+                  id="commit-msg"
                   value={commitMsg}
                   onChange={e => setCommitMsg(e.target.value)}
                   placeholder="Commit Nachricht..."
@@ -683,6 +692,7 @@ export const N9wPanel: React.FC = () => {
                   disabled={batchFiles.length === 0}
                 />
                 <button
+                  id="btn-smart-commit"
                   onClick={handleSmartCommit}
                   disabled={batchFiles.length === 0 || isGeneratingCommitMsg}
                   title="Commit Message generieren"
@@ -693,6 +703,7 @@ export const N9wPanel: React.FC = () => {
               </div>
             </div>
             <button
+              id="batch-commit-btn"
               onClick={handleMassPush}
               disabled={batchFiles.length === 0 || isPushing}
               className={`shrink-0 px-4 py-2 rounded-lg font-bold text-[10px] uppercase transition-all ${batchFiles.length > 0 ? "bg-purple-600 text-white" : "bg-stone-300 text-stone-500 cursor-not-allowed"}`}
@@ -707,7 +718,7 @@ export const N9wPanel: React.FC = () => {
           <div className="p-3 bg-stone-50 border-b border-stone-200 text-[11px] font-bold text-stone-800 flex items-center gap-2 shrink-0">
             <span className="text-purple-600">✨</span> SYSTEM LOG
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-white text-[11px] custom-scrollbar">
+          <div id="chat-history" className="flex-1 overflow-y-auto p-4 space-y-4 bg-white text-[11px] custom-scrollbar">
             {logs.map((log, idx) => (
               <div
                 key={idx}
@@ -726,27 +737,28 @@ export const N9wPanel: React.FC = () => {
             <div className="flex gap-2">
               <input
                 type="text"
+                id="chat-input"
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
                 onKeyPress={e => e.key === "Enter" && handleSendChat()}
                 placeholder="Frag den Architekten..."
                 className="flex-1 text-[11px] px-2 py-1.5 border border-stone-300 rounded focus:outline-none focus:border-purple-500"
               />
-              <button onClick={handleSendChat} className="bg-purple-600 text-white px-3 py-1.5 rounded text-[11px] font-bold hover:bg-purple-700 transition-colors shadow-sm">✨</button>
+              <button id="btn-send-chat" onClick={handleSendChat} className="bg-purple-600 text-white px-3 py-1.5 rounded text-[11px] font-bold hover:bg-purple-700 transition-colors shadow-sm">✨</button>
             </div>
           </div>
         </div>
       </main>
 
       {/* Mobile Navigation */}
-      <nav className="h-14 bg-white border-t border-stone-200 flex items-center justify-around shrink-0 z-50 lg:hidden">
-        <button onClick={() => setActiveTab("explorer")} className={`flex flex-col items-center gap-1 w-1/3 ${activeTab === "explorer" ? "text-purple-600" : "text-stone-400"}`}>
+      <nav id="mobile-nav" className="h-14 bg-white border-t border-stone-200 flex items-center justify-around shrink-0 z-50 lg:hidden">
+        <button id="tab-btn-explorer" onClick={() => setActiveTab("explorer")} className={`flex flex-col items-center gap-1 w-1/3 ${activeTab === "explorer" ? "text-purple-600" : "text-stone-400"}`}>
           <span className="text-lg leading-none">📁</span><span className="text-[9px] uppercase tracking-wider">Planung</span>
         </button>
-        <button onClick={() => setActiveTab("editor")} className={`flex flex-col items-center gap-1 w-1/3 ${activeTab === "editor" ? "text-purple-600" : "text-stone-400"}`}>
+        <button id="tab-btn-editor" onClick={() => setActiveTab("editor")} className={`flex flex-col items-center gap-1 w-1/3 ${activeTab === "editor" ? "text-purple-600" : "text-stone-400"}`}>
           <span className="text-lg leading-none">💻</span><span className="text-[9px] uppercase tracking-wider">Code</span>
         </button>
-        <button onClick={() => setActiveTab("chat")} className={`flex flex-col items-center gap-1 w-1/3 ${activeTab === "chat" ? "text-purple-600" : "text-stone-400"}`}>
+        <button id="tab-btn-chat" onClick={() => setActiveTab("chat")} className={`flex flex-col items-center gap-1 w-1/3 ${activeTab === "chat" ? "text-purple-600" : "text-stone-400"}`}>
           <span className="text-lg leading-none">✨</span><span className="text-[9px] uppercase tracking-wider">Log</span>
         </button>
       </nav>
