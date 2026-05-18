@@ -100,8 +100,15 @@ export const N9wPanel: React.FC = () => {
     scrollToBottom();
   }, [logs, scrollToBottom]);
 
+  const sanitizeHtml = (html: string) => {
+    return html
+      .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "")
+      .replace(/on\w+="[^"]*"/gim, "")
+      .replace(/on\w+='[^']*'/gim, "");
+  };
+
   const logToSystem = (text: string, type: LogEntry["type"] = "info") => {
-    setLogs(prev => [...prev, { text, type }]);
+    setLogs(prev => [...prev, { text: sanitizeHtml(text), type }]);
     if (type === "error" && window.innerWidth < 1024) {
       setActiveTab("chat");
     }
@@ -717,7 +724,7 @@ export const N9wPanel: React.FC = () => {
                   log.type === "warning" ? "bg-orange-50 border-orange-200 text-orange-800" :
                   "bg-stone-100 border-stone-200 text-stone-700"
                 }`}
-                dangerouslySetInnerHTML={{ __html: log.text }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(log.text) }}
               />
             ))}
             <div ref={chatEndRef} />

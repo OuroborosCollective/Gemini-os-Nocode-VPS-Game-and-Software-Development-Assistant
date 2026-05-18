@@ -63,7 +63,7 @@ const THEMES: Record<string, { text: string; line: string }> = {
 };
 
 export const ArchitectPanel: React.FC = () => {
-  const modelName = "gemini-2.5-flash-preview-09-2025";
+  const modelName = "gemini-2.0-flash-exp";
   // In Vite, process.env is replaced by define in config.
   // We use a fallback to empty string if not defined.
   const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || "";
@@ -102,10 +102,15 @@ export const ArchitectPanel: React.FC = () => {
     scrollToBottom();
   }, [logs, scrollToBottom]);
 
+  const sanitizeHtml = (html: string) => {
+    return html
+      .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "")
+      .replace(/on\w+="[^"]*"/gim, "")
+      .replace(/on\w+='[^']*'/gim, "");
+  };
+
   const logToSystem = (text: string, type: LogEntry["type"] = "info") => {
-    // Sanitize basic tags we expect from LLM but prevent others if needed.
-    // For now, trusting the internal log generator but using dangerouslySetInnerHTML requires caution.
-    setLogs(prev => [...prev, { text, type }]);
+    setLogs(prev => [...prev, { text: sanitizeHtml(text), type }]);
     if (type === "error" && window.innerWidth < 1024) {
       setActiveTab("chat");
     }
@@ -430,7 +435,7 @@ export const ArchitectPanel: React.FC = () => {
       logToSystem(`<i>🎙️ " ${spokenText} "</i>`, "info");
 
       // 2. Call the Gemini TTS API
-      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
       const ttsResponse = await fetch(ttsUrl, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -439,7 +444,7 @@ export const ArchitectPanel: React.FC = () => {
             responseModalities: ["AUDIO"],
             speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } } }
           },
-          model: "gemini-2.5-flash-preview-tts"
+          model: "gemini-2.0-flash-exp"
         })
       });
 
@@ -723,7 +728,7 @@ export const ArchitectPanel: React.FC = () => {
                   log.type === "warning" ? "bg-orange-50 border-orange-200 text-orange-800" :
                   "bg-stone-100 border-stone-200 text-stone-700"
                 }`}
-                dangerouslySetInnerHTML={{ __html: log.text }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(log.text) }}
               />
             ))}
             <div ref={chatEndRef} />
