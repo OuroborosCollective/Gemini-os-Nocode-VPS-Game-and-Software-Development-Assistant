@@ -62,7 +62,7 @@ const THEMES: Record<string, { text: string; line: string }> = {
   Compiler: { text: "text-purple-100", line: "text-purple-600" },
 };
 
-export const N9wPanel: React.FC = () => {
+export const N9wPanel: React.FC = React.memo(() => {
   const modelName = "gemini-2.0-flash-exp";
   const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || "";
 
@@ -91,6 +91,14 @@ export const N9wPanel: React.FC = () => {
   const [isGeneratingCommitMsg, setIsGeneratingCommitMsg] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const sanitizeHtml = (html: string) => {
+    return html
+      .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "")
+      .replace(/on\w+="[^"]*"/gim, "")
+      .replace(/on\w+='[^']*'/gim, "")
+      .replace(/on\w+=\w+/gim, "");
+  };
 
   const scrollToBottom = useCallback(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -172,8 +180,14 @@ export const N9wPanel: React.FC = () => {
     setCurrentFile(path);
     setIsLoadingFile(true);
     setActiveTab("editor");
-    const content = await fetchFileContent(path);
-    setCurrentFileContent(content);
+
+    const localChange = batchFiles.find((f) => f.path === path);
+    if (localChange) {
+      setCurrentFileContent(localChange.content);
+    } else {
+      const content = await fetchFileContent(path);
+      setCurrentFileContent(content);
+    }
     setIsLoadingFile(false);
   };
 
@@ -281,12 +295,16 @@ export const N9wPanel: React.FC = () => {
       const baseTreeSha = commitData.tree.sha;
 
       logToSystem("📦 [3/5] Schnüre neues Datenpaket (Tree)...", "info");
-      const tree = batchFiles.map(f => ({
-        path: f.path.replace(/^\/+/, ""),
-        mode: "100644",
-        type: "blob",
-        content: f.content
-      }));
+      const tree = batchFiles.map(f => {
+        // WICHTIG: GitHub hasst führende Slashes (z.B. /src/app.js). Wir müssen sie entfernen!
+        let cleanPath = f.path.replace(/^\/+/, '');
+        return {
+          path: cleanPath,
+          mode: '100644',
+          type: 'blob',
+          content: f.content
+        };
+      });
 
       const newTreeRes = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/git/trees`, {
         method: "POST", headers, body: JSON.stringify({ base_tree: baseTreeSha, tree })
@@ -450,20 +468,25 @@ export const N9wPanel: React.FC = () => {
       const sampleRate = 24000;
       const wavBuffer = new ArrayBuffer(44 + bytes.byteLength);
       const view = new DataView(wavBuffer);
-      const writeString = (v: DataView, offset: number, str: string) => { for (let i=0; i<str.length; i++) v.setUint8(offset+i, str.charCodeAt(i)); };
-      writeString(view, 0, "RIFF");
+
+      const writeString = (v: DataView, offset: number, str: string) => {
+        for (let i = 0; i < str.length; i++) v.setUint8(offset + i, str.charCodeAt(i));
+      };
+
+      writeString(view, 0, 'RIFF');
       view.setUint32(4, 36 + bytes.byteLength, true);
-      writeString(view, 8, "WAVE");
-      writeString(view, 12, "fmt ");
-      view.setUint32(16, 16, true);
-      view.setUint16(20, 1, true);
-      view.setUint16(22, 1, true);
+      writeString(view, 8, 'WAVE');
+      writeString(view, 12, 'fmt ');
+      view.setUint32(16, 16, true); // Subchunk1Size
+      view.setUint16(20, 1, true);  // AudioFormat (PCM)
+      view.setUint16(22, 1, true);  // NumChannels (Mono)
       view.setUint32(24, sampleRate, true);
-      view.setUint32(28, sampleRate * 2, true);
-      view.setUint16(32, 2, true);
-      view.setUint16(34, 16, true);
-      writeString(view, 36, "data");
+      view.setUint32(28, sampleRate * 2, true); // ByteRate
+      view.setUint16(32, 2, true);  // BlockAlign
+      view.setUint16(34, 16, true); // BitsPerSample
+      writeString(view, 36, 'data');
       view.setUint32(40, bytes.byteLength, true);
+
       new Uint8Array(wavBuffer, 44).set(bytes);
 
       const audioBlob = new Blob([view], { type: "audio/wav" });
@@ -542,8 +565,9 @@ export const N9wPanel: React.FC = () => {
             type="password"
             value={ghPat}
             onChange={e => setGhPat(e.target.value)}
-            placeholder="GitHub PAT"
-            className="text-xs px-2 py-1 border border-stone-300 rounded w-40 focus:outline-none focus:border-purple-500"
+            placeholder="GitHub PAT (repo scope!)"
+            title="Braucht 'repo' Berechtigung für Private Repos"
+            className="text-xs px-2 py-1 border border-stone-300 rounded w-48 focus:outline-none focus:border-purple-500"
           />
           {isRouting && (
             <div className="text-[10px] font-bold text-purple-600 flex items-center gap-1">
@@ -574,7 +598,7 @@ export const N9wPanel: React.FC = () => {
               onChange={e => setArchitectInput(e.target.value)}
               rows={4}
               className="w-full p-2 text-[11px] border border-purple-200 rounded focus:outline-none focus:border-purple-500 resize-none shadow-inner"
-              placeholder="Kopiere Modul-Texte aus dem PDF hierher..."
+              placeholder="Kopiere Modul-Texte aus dem PDF hierher. (z.B. 'Baue Modul 4: Retail-Heatmap...'). Der Architekt übernimmt."
             />
             <button
               onClick={runArchitect}
@@ -589,7 +613,7 @@ export const N9wPanel: React.FC = () => {
             {fullTree.length === 0 ? (
               <div className="p-4 text-xs italic text-stone-400">Lade Repository...</div>
             ) : (
-              fullTree.map(file => (
+              fullTree.slice(0, 150).map(file => (
                 <div
                   key={file.path}
                   onClick={() => handleSelectFile(file.path)}
@@ -620,7 +644,7 @@ export const N9wPanel: React.FC = () => {
                   <button onClick={() => handleAIAction("Refactor", "Du bist ein Clean Code Experte. Refaktorisiere den Code. Optimiere die Performance, verbessere die Lesbarkeit und wende moderne Best Practices (z.B. ES6+, SOLID) an. Verändere nicht die Kernlogik. Gib NUR den vollständigen, optimierten Code zurück (kein Markdown drumherum, nur Raw Code).", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Refactor</button>
                   <button onClick={() => handleAIAction("Auto-Fix", "Du bist ein meisterhafter Debugger. Finde Syntax-Fehler, logische Lücken oder veraltete API-Aufrufe im Code und BEHEBE sie. Verändere nicht die Kern-Architektur, mache den Code nur lauffähig und fehlerfrei. Gib NUR den reparierten Code zurück, absolut kein Markdown, keine Erklärungen.", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 font-bold shadow-sm transition-all">✨ Auto-Fix</button>
                   <button onClick={() => handleAIAction("Big-O", "Du bist ein Informatik-Professor. Analysiere die Zeitkomplexität (Time Complexity) und Platzkomplexität (Space Complexity) im Big-O Format für die Hauptfunktionen im folgenden Code. Gib an, wo der Flaschenhals liegt und wie man ihn optimieren könnte. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 font-bold shadow-sm transition-all">✨ Big-O</button>
-                  <button onClick={() => handleAIAction("Diagram", "Du bist ein Software-Architekt. Erstelle ein Mermaid.js Diagramm (z.B. Flowchart oder Class Diagram), das den Ablauf and die Struktur des folgenden Codes visuell darstellt. Gib NUR den Mermaid-Code zurück, eingebettet in einem Markdown-Block: ```mermaid\n[DEIN CODE]\n```", { newExtension: "md", suffix: "-diagram", wrapContent: (content) => `# Architektur: ${currentFile}\n\n${content}\n` })} className="shrink-0 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-200 font-bold shadow-sm transition-all">✨ Diagram</button>
+                  <button onClick={() => handleAIAction("Diagram", "Du bist ein Software-Architekt. Erstelle ein Mermaid.js Diagramm (z.B. Flowchart oder Class Diagram), das den Ablauf und die Struktur des folgenden Codes visuell darstellt. Gib NUR den Mermaid-Code zurück, eingebettet in einem Markdown-Block: ```mermaid\n[DEIN CODE]\n```", { newExtension: "md", suffix: "-diagram", wrapContent: (content) => `# Architektur: ${currentFile}\n\n${content}\n` })} className="shrink-0 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-200 font-bold shadow-sm transition-all">✨ Diagram</button>
                   <button onClick={() => handleAIAction("Security", "Du bist ein erfahrener White-Hat Hacker und Cyber-Security Experte. Analysiere den folgenden Code auf gängige Schwachstellen (z.B. OWASP Top 10, Injection, XSS, ungesicherte APIs, Secrets im Code). Gib konkrete Warnungen und Lösungsvorschläge. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul class='list-disc pl-4'>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 font-bold shadow-sm transition-all">✨ Security</button>
                   <button onClick={() => handleAIAction("Mock Data", "Du bist ein Backend-Entwickler. Analysiere den Code (Modelle, Interfaces, Variablen oder UI-Komponenten) und generiere dazu passende, extrem realistische Mock-Daten als JSON-Array mit 5 detaillierten Objekten. Gib AUSSCHLIESSLICH das nackte JSON zurück, ohne Markdown-Fences drumherum.", { newExtension: "json", suffix: "_mock" })} className="shrink-0 text-[10px] bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200 font-bold shadow-sm transition-all">✨ Mock Data</button>
                   <button onClick={() => handleAIAction("A11y", "Du bist ein Experte für Web Accessibility (WCAG). Analysiere den folgenden Code (insbesondere HTML, JSX, TSX) auf Barrierefreiheit. Prüfe auf fehlende ARIA-Labels, schlechte Kontraste, Tastaturnavigation und Alt-Texte. Gib konkrete Verbesserungsvorschläge. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul class='list-disc pl-4'>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-teal-100 text-teal-700 px-2 py-1 rounded hover:bg-teal-200 font-bold shadow-sm transition-all">✨ A11y</button>
@@ -717,7 +741,7 @@ export const N9wPanel: React.FC = () => {
                   log.type === "warning" ? "bg-orange-50 border-orange-200 text-orange-800" :
                   "bg-stone-100 border-stone-200 text-stone-700"
                 }`}
-                dangerouslySetInnerHTML={{ __html: log.text }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(log.text) }}
               />
             ))}
             <div ref={chatEndRef} />
@@ -752,4 +776,4 @@ export const N9wPanel: React.FC = () => {
       </nav>
     </div>
   );
-};
+});

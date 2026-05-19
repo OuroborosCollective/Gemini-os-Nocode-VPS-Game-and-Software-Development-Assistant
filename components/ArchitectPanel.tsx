@@ -62,8 +62,8 @@ const THEMES: Record<string, { text: string; line: string }> = {
   Compiler: { text: "text-purple-100", line: "text-purple-600" },
 };
 
-export const ArchitectPanel: React.FC = () => {
-  const modelName = "gemini-2.5-flash-preview-09-2025";
+export const ArchitectPanel: React.FC = React.memo(() => {
+  const modelName = "gemini-2.0-flash-exp";
   // In Vite, process.env is replaced by define in config.
   // We use a fallback to empty string if not defined.
   const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || "";
@@ -93,6 +93,14 @@ export const ArchitectPanel: React.FC = () => {
   const [isGeneratingCommitMsg, setIsGeneratingCommitMsg] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const sanitizeHtml = (html: string) => {
+    return html
+      .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "")
+      .replace(/on\w+="[^"]*"/gim, "")
+      .replace(/on\w+='[^']*'/gim, "")
+      .replace(/on\w+=\w+/gim, "");
+  };
 
   const scrollToBottom = useCallback(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -176,8 +184,14 @@ export const ArchitectPanel: React.FC = () => {
     setCurrentFile(path);
     setIsLoadingFile(true);
     setActiveTab("editor");
-    const content = await fetchFileContent(path);
-    setCurrentFileContent(content);
+
+    const localChange = batchFiles.find((f) => f.path === path);
+    if (localChange) {
+      setCurrentFileContent(localChange.content);
+    } else {
+      const content = await fetchFileContent(path);
+      setCurrentFileContent(content);
+    }
     setIsLoadingFile(false);
   };
 
@@ -285,12 +299,16 @@ export const ArchitectPanel: React.FC = () => {
       const baseTreeSha = commitData.tree.sha;
 
       logToSystem("📦 [3/5] Schnüre neues Datenpaket (Tree)...", "info");
-      const tree = batchFiles.map(f => ({
-        path: f.path.replace(/^\/+/, ""),
-        mode: "100644",
-        type: "blob",
-        content: f.content
-      }));
+      const tree = batchFiles.map(f => {
+        // WICHTIG: GitHub hasst führende Slashes (z.B. /src/app.js). Wir müssen sie entfernen!
+        let cleanPath = f.path.replace(/^\/+/, '');
+        return {
+          path: cleanPath,
+          mode: '100644',
+          type: 'blob',
+          content: f.content
+        };
+      });
 
       const newTreeRes = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/git/trees`, {
         method: "POST", headers, body: JSON.stringify({ base_tree: baseTreeSha, tree })
@@ -430,7 +448,7 @@ export const ArchitectPanel: React.FC = () => {
       logToSystem(`<i>🎙️ " ${spokenText} "</i>`, "info");
 
       // 2. Call the Gemini TTS API
-      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
       const ttsResponse = await fetch(ttsUrl, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -439,7 +457,7 @@ export const ArchitectPanel: React.FC = () => {
             responseModalities: ["AUDIO"],
             speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } } }
           },
-          model: "gemini-2.5-flash-preview-tts"
+          model: modelName
         })
       });
 
@@ -456,20 +474,25 @@ export const ArchitectPanel: React.FC = () => {
       const sampleRate = 24000;
       const wavBuffer = new ArrayBuffer(44 + bytes.byteLength);
       const view = new DataView(wavBuffer);
-      const writeString = (v: DataView, offset: number, str: string) => { for (let i=0; i<str.length; i++) v.setUint8(offset+i, str.charCodeAt(i)); };
-      writeString(view, 0, "RIFF");
+
+      const writeString = (v: DataView, offset: number, str: string) => {
+        for (let i = 0; i < str.length; i++) v.setUint8(offset + i, str.charCodeAt(i));
+      };
+
+      writeString(view, 0, 'RIFF');
       view.setUint32(4, 36 + bytes.byteLength, true);
-      writeString(view, 8, "WAVE");
-      writeString(view, 12, "fmt ");
-      view.setUint32(16, 16, true);
-      view.setUint16(20, 1, true);
-      view.setUint16(22, 1, true);
+      writeString(view, 8, 'WAVE');
+      writeString(view, 12, 'fmt ');
+      view.setUint32(16, 16, true); // Subchunk1Size
+      view.setUint16(20, 1, true);  // AudioFormat (PCM)
+      view.setUint16(22, 1, true);  // NumChannels (Mono)
       view.setUint32(24, sampleRate, true);
-      view.setUint32(28, sampleRate * 2, true);
-      view.setUint16(32, 2, true);
-      view.setUint16(34, 16, true);
-      writeString(view, 36, "data");
+      view.setUint32(28, sampleRate * 2, true); // ByteRate
+      view.setUint16(32, 2, true);  // BlockAlign
+      view.setUint16(34, 16, true); // BitsPerSample
+      writeString(view, 36, 'data');
       view.setUint32(40, bytes.byteLength, true);
+
       new Uint8Array(wavBuffer, 44).set(bytes);
 
       const audioBlob = new Blob([view], { type: "audio/wav" });
@@ -548,8 +571,9 @@ export const ArchitectPanel: React.FC = () => {
             type="password"
             value={ghPat}
             onChange={e => setGhPat(e.target.value)}
-            placeholder="GitHub PAT"
-            className="text-xs px-2 py-1 border border-stone-300 rounded w-40 focus:outline-none focus:border-purple-500"
+            placeholder="GitHub PAT (repo scope!)"
+            title="Braucht 'repo' Berechtigung für Private Repos"
+            className="text-xs px-2 py-1 border border-stone-300 rounded w-48 focus:outline-none focus:border-purple-500"
           />
           {isRouting && (
             <div className="text-[10px] font-bold text-purple-600 flex items-center gap-1">
@@ -580,7 +604,7 @@ export const ArchitectPanel: React.FC = () => {
               onChange={e => setArchitectInput(e.target.value)}
               rows={4}
               className="w-full p-2 text-[11px] border border-purple-200 rounded focus:outline-none focus:border-purple-500 resize-none shadow-inner"
-              placeholder="Kopiere Modul-Texte aus dem PDF hierher..."
+              placeholder="Kopiere Modul-Texte aus dem PDF hierher. (z.B. 'Baue Modul 4: Retail-Heatmap...'). Der Architekt übernimmt."
             />
             <button
               onClick={runArchitect}
@@ -595,7 +619,7 @@ export const ArchitectPanel: React.FC = () => {
             {fullTree.length === 0 ? (
               <div className="p-4 text-xs italic text-stone-400">Lade Repository...</div>
             ) : (
-              fullTree.map(file => (
+              fullTree.slice(0, 150).map(file => (
                 <div
                   key={file.path}
                   onClick={() => handleSelectFile(file.path)}
@@ -723,7 +747,7 @@ export const ArchitectPanel: React.FC = () => {
                   log.type === "warning" ? "bg-orange-50 border-orange-200 text-orange-800" :
                   "bg-stone-100 border-stone-200 text-stone-700"
                 }`}
-                dangerouslySetInnerHTML={{ __html: log.text }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(log.text) }}
               />
             ))}
             <div ref={chatEndRef} />
@@ -758,4 +782,4 @@ export const ArchitectPanel: React.FC = () => {
       </nav>
     </div>
   );
-};
+});
