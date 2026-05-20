@@ -100,16 +100,16 @@
     font-family: 'Fira Code', monospace;
   }
   .architect-file-tree-item {
-    @apply p-2 border-b border-stone-100 text-[11px] flex items-center gap-2 text-stone-500 cursor-pointer transition-colors hover:bg-stone-50;
+    @apply p-[12px] px-[16px] border-b border-[#f0f0f0] text-[13px] flex items-center gap-2 text-[#57534e] cursor-pointer transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500;
   }
   .architect-file-tree-item.active-file {
-    @apply bg-teal-50 text-teal-600 border-l-2 border-teal-600 font-semibold;
+    @apply bg-[#f0fdfa] text-[#0d9488] border-l-4 border-[#0d9488] font-semibold;
   }
   .architect-code-line {
-    @apply flex gap-3 mb-0;
+    @apply flex gap-3 mb-[2px];
   }
   .architect-line-number {
-    @apply text-stone-500 text-right w-6 select-none border-r border-stone-800 pr-1.5 shrink-0;
+    @apply text-stone-500 text-right w-8 select-none border-r border-[#292524] pr-1.5 shrink-0;
   }
 
   /* n9w specific styles */
@@ -118,16 +118,16 @@
     font-family: 'Fira Code', monospace;
   }
   .n9w-file-tree-item {
-    @apply p-2 border-b border-stone-100 text-[11px] flex items-center gap-2 text-stone-500 cursor-pointer transition-colors hover:bg-stone-50;
+    @apply p-[12px] px-[16px] border-b border-[#f0f0f0] text-[13px] flex items-center gap-2 text-[#57534e] cursor-pointer transition-colors hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500;
   }
   .n9w-file-tree-item.active-file {
-    @apply bg-teal-50 text-teal-600 border-l-2 border-teal-600 font-semibold;
+    @apply bg-[#f0fdfa] text-[#0d9488] border-l-4 border-[#0d9488] font-semibold;
   }
   .n9w-code-line {
-    @apply flex gap-3 mb-0;
+    @apply flex gap-3 mb-[2px];
   }
   .n9w-line-number {
-    @apply text-stone-500 text-right w-6 select-none border-r border-stone-800 pr-1.5 shrink-0;
+    @apply text-stone-500 text-right w-8 select-none border-r border-[#292524] pr-1.5 shrink-0;
   }
 
   .custom-scrollbar::-webkit-scrollbar {
