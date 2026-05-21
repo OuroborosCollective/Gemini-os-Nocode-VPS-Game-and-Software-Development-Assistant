@@ -12,25 +12,20 @@ interface IconProps {
 }
 
 export const Icon = React.memo<IconProps>(({ app, onInteract }) => {
-  const handleClick = useCallback(() => {
+  const handleInteract = React.useCallback(() => {
     onInteract(app);
-  }, [onInteract, app]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        onInteract(app);
-      }
-    },
-    [onInteract, app],
-  );
+  }, [app, onInteract]);
 
   return (
     <div
       className="icon"
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
+      onClick={handleInteract}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleInteract();
+        }
+      }}
       tabIndex={0}
       role="button"
       aria-label={`Open ${app.name}`}
