@@ -9,6 +9,7 @@ export const FileExplorerPanel: React.FC = () => {
     const [path, setPath] = useState("/");
     const [files, setFiles] = useState<{name: string, isDirectory: boolean, path: string}[]>([]);
     const [copyBuffer, setCopyBuffer] = useState<string | null>(null);
+    const [lastCopiedPath, setLastCopiedPath] = useState<string | null>(null);
 
     const refreshFiles = async (p = path) => {
         const res = await fetch(`/api/ssh/ls?path=${encodeURIComponent(p)}`);
@@ -44,7 +45,16 @@ export const FileExplorerPanel: React.FC = () => {
                 <div key={f.path} className="p-2 mb-1 border rounded flex justify-between items-center">
                     <span className="cursor-pointer" onClick={() => f.isDirectory && setPath(f.path)}>{f.name} {f.isDirectory ? "/" : ""}</span>
                     <div className="flex gap-2">
-                        <button className="text-xs bg-gray-200 p-1" onClick={() => setCopyBuffer(f.path)}>Copy</button>
+                        <button
+                            className={`text-xs p-1 rounded transition-colors ${lastCopiedPath === f.path ? "bg-green-100 text-green-800" : "bg-gray-200"}`}
+                            onClick={() => {
+                                setCopyBuffer(f.path);
+                                setLastCopiedPath(f.path);
+                                setTimeout(() => setLastCopiedPath(null), 2000);
+                            }}
+                        >
+                            {lastCopiedPath === f.path ? "Copied!" : "Copy"}
+                        </button>
                         <button className="text-xs bg-gray-200 p-1" onClick={() => {
                             const name = prompt("New name:");
                             if(name) handleAction("rename", f.path, f.path.split('/').slice(0,-1).join('/') + '/' + name);
