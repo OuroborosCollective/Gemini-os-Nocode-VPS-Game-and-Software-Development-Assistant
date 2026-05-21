@@ -21,7 +21,7 @@ export async function* streamAppContent(
   interactionHistory: InteractionData[],
   currentMaxHistoryLength: number,
 ): AsyncGenerator<string, void, void> {
-  const model = "gemini-3-flash-preview";
+  const model = "gemini-2.0-flash-exp";
 
   if (!process.env.GEMINI_API_KEY) {
     yield `<div class="p-4 text-red-700 bg-red-100 rounded-lg">

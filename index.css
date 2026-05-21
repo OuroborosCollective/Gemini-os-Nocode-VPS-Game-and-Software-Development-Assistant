@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;600;700&display=swap');
 @import "tailwindcss";
 
 @layer base {
@@ -91,5 +92,52 @@
   }
   .animate-shimmer {
     animation: shimmer 3s linear infinite;
+  }
+
+  /* Architect specific styles */
+  .architect-editor-bg {
+    background-color: #0c0a09;
+    font-family: 'Fira Code', monospace;
+  }
+  .architect-file-tree-item {
+    @apply p-[12px] px-[16px] border-b border-[#f0f0f0] text-[13px] flex items-center gap-[10px] text-[#57534e] cursor-pointer transition-colors hover:bg-stone-50;
+  }
+  .architect-file-tree-item.active-file {
+    @apply bg-[#f0fdfa] text-[#0d9488] border-l-4 border-[#0d9488] font-semibold;
+  }
+  .architect-code-line {
+    @apply flex gap-3 mb-[2px];
+  }
+  .architect-line-number {
+    @apply text-[#57534e] text-right w-8 select-none border-r border-[#292524] pr-[6px] shrink-0;
+  }
+
+  /* n9w specific styles */
+  .n9w-editor-bg {
+    background-color: #0c0a09;
+    font-family: 'Fira Code', monospace;
+  }
+  .n9w-file-tree-item {
+    @apply p-[12px] px-[16px] border-b border-[#f0f0f0] text-[13px] flex items-center gap-[10px] text-[#57534e] cursor-pointer transition-colors hover:bg-stone-50;
+  }
+  .n9w-file-tree-item.active-file {
+    @apply bg-[#f0fdfa] text-[#0d9488] border-l-4 border-[#0d9488] font-semibold;
+  }
+  .n9w-code-line {
+    @apply flex gap-3 mb-[2px];
+  }
+  .n9w-line-number {
+    @apply text-[#57534e] text-right w-8 select-none border-r border-[#292524] pr-[6px] shrink-0;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-stone-300 rounded-full;
   }
 }
