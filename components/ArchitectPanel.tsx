@@ -63,7 +63,7 @@ const THEMES: Record<string, { text: string; line: string }> = {
 };
 
 export const ArchitectPanel: React.FC = () => {
-  const modelName = "gemini-2.0-flash-exp";
+  const modelName = "gemini-2.5-flash-preview-09-2025";
   // In Vite, process.env is replaced by define in config.
   // We use a fallback to empty string if not defined.
   const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || "";
