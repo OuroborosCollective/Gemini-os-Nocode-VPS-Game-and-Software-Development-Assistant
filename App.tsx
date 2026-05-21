@@ -10,6 +10,7 @@ import { ArchitectPanel } from "./components/ArchitectPanel";
 import { N9wPanel } from "./components/N9wPanel";
 import { FileExplorerPanel } from "./components/FileExplorerPanel";
 import { GitHubManagerPanel } from "./components/GitHubManagerPanel";
+import { SovereignStudioPanel } from "./components/SovereignStudioPanel";
 import { ParametersPanel } from "./components/ParametersPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { Window } from "./components/Window";
