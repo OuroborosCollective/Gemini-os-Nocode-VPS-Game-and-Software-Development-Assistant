@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 /* tslint:disable */
-import React from "react";
+import React, { useCallback } from "react";
 import { AppDefinition } from "../types";
 
 interface IconProps {
