@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 /* tslint:disable */
-import React from "react";
+import React, { useCallback } from "react";
 import { AppDefinition } from "../types";
 
 interface IconProps {
@@ -12,14 +12,18 @@ interface IconProps {
 }
 
 export const Icon = React.memo<IconProps>(({ app, onInteract }) => {
+  const handleInteract = React.useCallback(() => {
+    onInteract(app);
+  }, [app, onInteract]);
+
   return (
     <div
       className="icon"
-      onClick={onInteract}
+      onClick={handleInteract}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onInteract();
+          handleInteract();
         }
       }}
       tabIndex={0}

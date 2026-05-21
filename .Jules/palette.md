@@ -1,3 +1,3 @@
-## 2026-04-27 - [Keyboard Accessibility & ARIA Status]
-**Learning:** Interactive elements implemented as `<span>` (common in this repo's "Nano Architecture") require explicit `focus-visible` styles and `e.preventDefault()` in `onKeyDown` to behave correctly for keyboard users. Visual-only status indicators (like connection dots) must have `role="status"` and `aria-label` to be accessible.
-**Action:** When creating or modifying button-like elements or status indicators, always ensure they have proper ARIA attributes, keyboard listeners with event prevention, and visible focus indicators.
+## 2026-04-29 - UI Accessibility and Interaction Polish
+**Learning:** Found that the app used extremely small font sizes (6px-8px) in the title bar and menu bar, which are below accessibility standards. Also identified that high-contrast green (bg-green-500) with white text fails WCAG contrast requirements (approx 2.3:1).
+**Action:** Increased font sizes to at least 10px and adjusted container heights. Used `bg-green-100 text-green-800` for better contrast in feedback states.
