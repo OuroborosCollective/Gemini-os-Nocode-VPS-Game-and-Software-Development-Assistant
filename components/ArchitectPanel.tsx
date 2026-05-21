@@ -201,11 +201,11 @@ export const ArchitectPanel: React.FC = () => {
 
     try {
       const architectSys = `Du bist der Ouroboros Software-Architekt. Deine Aufgabe ist es, einen Text-Blueprint in striktes JSON zu parsen.
-      Analysiere das Modul und überlege, welche Dateien erstellt oder modifiziert werden müssen (Logik, UI, Config).
-      ANTWORTE AUSSCHLIESSLICH MIT EINEM VALIDEN JSON-ARRAY im folgenden Format, KEIN MARKDOWN, KEIN TEXT:
-      [
-        { "path": "client/src/...", "task": "Detaillierte Anweisung für den Compiler, was hier programmiert werden soll" }
-      ]`;
+                Analysiere das Modul und überlege, welche Dateien erstellt oder modifiziert werden müssen (Logik, UI, Config).
+                ANTWORTE AUSSCHLIESSLICH MIT EINEM VALIDEN JSON-ARRAY im folgenden Format, KEIN MARKDOWN, KEIN TEXT:
+                [
+                  { "path": "client/src/...", "task": "Detaillierte Anweisung für den Compiler, was hier programmiert werden soll" }
+                ]`;
 
       const rawPlan = await callGeminiAPI(architectInput, architectSys);
       const cleanPlan = rawPlan.replace(/```json/g, "").replace(/```/g, "").trim();
@@ -444,7 +444,7 @@ export const ArchitectPanel: React.FC = () => {
       // 2. Call the Gemini TTS API
       const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
       const ttsResponse = await fetch(ttsUrl, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: spokenText }] }],
           generationConfig: {
@@ -546,14 +546,14 @@ export const ArchitectPanel: React.FC = () => {
               value={repoOwner}
               onChange={e => setRepoOwner(e.target.value)}
               placeholder="Repo Owner"
-              className="text-[8px] px-1.5 py-0.5 border border-stone-200 rounded w-32 focus:outline-none focus:border-purple-500"
+              className="text-[10px] px-1.5 py-0.5 border border-stone-200 rounded w-32 focus:outline-none focus:border-purple-500"
             />
             <input
               type="text"
               value={repoName}
               onChange={e => setRepoName(e.target.value)}
               placeholder="Repo Name"
-              className="text-[8px] px-1.5 py-0.5 border border-stone-200 rounded w-32 focus:outline-none focus:border-purple-500"
+              className="text-[10px] px-1.5 py-0.5 border border-stone-200 rounded w-32 focus:outline-none focus:border-purple-500"
             />
           </div>
           <input
@@ -770,4 +770,4 @@ export const ArchitectPanel: React.FC = () => {
       </nav>
     </div>
   );
-};
+});
