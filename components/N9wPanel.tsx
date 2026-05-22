@@ -159,7 +159,7 @@ export const N9wPanel: React.FC = () => {
 
   useEffect(() => {
     fetchRepoTree();
-  }, [fetchRepoTree]);
+  }, []);
 
   const fetchFileContent = async (path: string) => {
     try {
@@ -211,7 +211,7 @@ export const N9wPanel: React.FC = () => {
 
       logToSystem(`<b>Projektplan erstellt:</b><br>${plan.length} Dateien müssen bearbeitet werden. Compiler übernimmt...`, "info");
 
-      const newBatchFiles: BatchFile[] = [...batchFiles];
+      const newBatchFiles: BatchFile[] = [];
 
       for (let i = 0; i < plan.length; i++) {
         const step = plan[i];

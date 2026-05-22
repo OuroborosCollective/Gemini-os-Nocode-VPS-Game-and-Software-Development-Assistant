@@ -63,7 +63,7 @@ const THEMES: Record<string, { text: string; line: string }> = {
 };
 
 export const ArchitectPanel: React.FC = () => {
-  const modelName = "gemini-2.5-flash-preview-09-2025";
+  const modelName = "gemini-2.0-flash-exp";
   // In Vite, process.env is replaced by define in config.
   // We use a fallback to empty string if not defined.
   const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || "";
@@ -161,7 +161,7 @@ export const ArchitectPanel: React.FC = () => {
 
   useEffect(() => {
     fetchRepoTree();
-  }, [fetchRepoTree]);
+  }, []);
 
   const fetchFileContent = async (path: string) => {
     try {
@@ -213,7 +213,7 @@ export const ArchitectPanel: React.FC = () => {
 
       logToSystem(`<b>Projektplan erstellt:</b><br>${plan.length} Dateien müssen bearbeitet werden. Compiler übernimmt...`, "info");
 
-      const newBatchFiles: BatchFile[] = [...batchFiles];
+      const newBatchFiles: BatchFile[] = [];
 
       for (let i = 0; i < plan.length; i++) {
         const step = plan[i];
@@ -442,7 +442,7 @@ export const ArchitectPanel: React.FC = () => {
       logToSystem(`<i>🎙️ " ${spokenText} "</i>`, "info");
 
       // 2. Call the Gemini TTS API
-      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
       const ttsResponse = await fetch(ttsUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -770,4 +770,4 @@ export const ArchitectPanel: React.FC = () => {
       </nav>
     </div>
   );
-});
+};
