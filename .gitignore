@@ -11,6 +11,11 @@ node_modules
 dist
 dist-ssr
 *.local
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!metadata.json
 
 # Editor directories and files
 .vscode/*
