@@ -63,7 +63,7 @@ const THEMES: Record<string, { text: string; line: string }> = {
 };
 
 export const ArchitectPanel: React.FC = () => {
-  const modelName = "gemini-2.0-flash-exp";
+  const modelName = "gemini-2.5-flash-preview-09-2025";
   // In Vite, process.env is replaced by define in config.
   // We use a fallback to empty string if not defined.
   const envApiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || "";
@@ -455,7 +455,8 @@ export const ArchitectPanel: React.FC = () => {
 
       // 2. Call the Gemini TTS API
       const keyToUse = geminiApiKey || envApiKey;
-      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyToUse}`;
+      const ttsModel = "gemini-2.5-flash-preview-tts";
+      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/${ttsModel}:generateContent?key=${keyToUse}`;
       const ttsResponse = await fetch(ttsUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -464,7 +465,7 @@ export const ArchitectPanel: React.FC = () => {
             responseModalities: ["AUDIO"],
             speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } } }
           },
-          model: modelName
+          model: ttsModel
         })
       });
 

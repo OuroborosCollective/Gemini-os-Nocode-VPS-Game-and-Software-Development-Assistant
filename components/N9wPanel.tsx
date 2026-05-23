@@ -63,7 +63,7 @@ const THEMES: Record<string, { text: string; line: string }> = {
 };
 
 export const N9wPanel: React.FC = () => {
-  const modelName = "gemini-2.0-flash-exp";
+  const modelName = "gemini-2.5-flash-preview-09-2025";
   const envApiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || "";
 
   const [geminiApiKey, setGeminiApiKey] = useState(envApiKey);
@@ -451,7 +451,8 @@ export const N9wPanel: React.FC = () => {
       logToSystem(`<i>🎙️ " ${spokenText} "</i>`, "info");
 
       const keyToUse = geminiApiKey || envApiKey;
-      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyToUse}`;
+      const ttsModel = "gemini-2.5-flash-preview-tts";
+      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/${ttsModel}:generateContent?key=${keyToUse}`;
       const ttsResponse = await fetch(ttsUrl, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -460,7 +461,7 @@ export const N9wPanel: React.FC = () => {
             responseModalities: ["AUDIO"],
             speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } } }
           },
-          model: modelName
+          model: ttsModel
         })
       });
 
