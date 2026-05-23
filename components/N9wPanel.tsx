@@ -64,8 +64,9 @@ const THEMES: Record<string, { text: string; line: string }> = {
 
 export const N9wPanel: React.FC = () => {
   const modelName = "gemini-2.0-flash-exp";
-  const apiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || "";
+  const envApiKey = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || "";
 
+  const [geminiApiKey, setGeminiApiKey] = useState(envApiKey);
   const [ghPat, setGhPat] = useState("");
   const [repoOwner, setRepoOwner] = useState("OuroborosCollective");
   const [repoName, setRepoName] = useState("Wasd");
@@ -115,11 +116,12 @@ export const N9wPanel: React.FC = () => {
   };
 
   const callGeminiAPI = async (prompt: string, system: string, customModel?: string) => {
-    if (!apiKey) {
-        throw new Error("GEMINI_API_KEY is not set. Please check your environment variables.");
+    const keyToUse = geminiApiKey || envApiKey;
+    if (!keyToUse) {
+        throw new Error("GEMINI_API_KEY is not set. Please check your environment variables or enter it in the header.");
     }
     const targetModel = customModel || modelName;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${keyToUse}`;
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -159,6 +161,9 @@ export const N9wPanel: React.FC = () => {
 
   useEffect(() => {
     fetchRepoTree();
+    if (window.innerWidth < 1024) {
+      setActiveTab("explorer");
+    }
   }, [fetchRepoTree]);
 
   const fetchFileContent = async (path: string) => {
@@ -211,7 +216,7 @@ export const N9wPanel: React.FC = () => {
 
       logToSystem(`<b>Projektplan erstellt:</b><br>${plan.length} Dateien müssen bearbeitet werden. Compiler übernimmt...`, "info");
 
-      const newBatchFiles: BatchFile[] = [...batchFiles];
+      const newBatchFiles: BatchFile[] = [];
 
       for (let i = 0; i < plan.length; i++) {
         const step = plan[i];
@@ -397,6 +402,13 @@ export const N9wPanel: React.FC = () => {
           response = options.wrapContent(response);
         }
 
+        // Format JSON nicely if valid
+        if (action === "Mock Data" || action === "i18n") {
+          try {
+            response = JSON.stringify(JSON.parse(response), null, 2);
+          } catch (e) {}
+        }
+
         let targetFile = currentFile;
         if (options.outputFilename) {
           targetFile = options.outputFilename;
@@ -438,7 +450,8 @@ export const N9wPanel: React.FC = () => {
 
       logToSystem(`<i>🎙️ " ${spokenText} "</i>`, "info");
 
-      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      const keyToUse = geminiApiKey || envApiKey;
+      const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${keyToUse}`;
       const ttsResponse = await fetch(ttsUrl, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -554,9 +567,17 @@ export const N9wPanel: React.FC = () => {
           </div>
           <input
             type="password"
+            value={geminiApiKey}
+            onChange={e => setGeminiApiKey(e.target.value)}
+            placeholder="Gemini API Key"
+            className="text-xs px-2 py-1 border border-stone-300 rounded w-32 focus:outline-none focus:border-purple-500"
+          />
+          <input
+            type="password"
             value={ghPat}
             onChange={e => setGhPat(e.target.value)}
             placeholder="GitHub PAT"
+            title="Braucht 'repo' Berechtigung für Private Repos"
             className="text-xs px-2 py-1 border border-stone-300 rounded w-40 focus:outline-none focus:border-purple-500"
           />
           {isRouting && (
@@ -588,7 +609,7 @@ export const N9wPanel: React.FC = () => {
               onChange={e => setArchitectInput(e.target.value)}
               rows={4}
               className="w-full p-2 text-[11px] border border-purple-200 rounded focus:outline-none focus:border-purple-500 resize-none shadow-inner"
-              placeholder="Kopiere Modul-Texte aus dem PDF hierher..."
+              placeholder="Kopiere Modul-Texte aus dem PDF hierher. (z.B. 'Baue Modul 4: Retail-Heatmap...'). Der Architekt übernimmt."
             />
             <button
               onClick={runArchitect}
