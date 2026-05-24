@@ -138,6 +138,6 @@
     background: transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-stone-300 rounded-full;
+    @apply bg-[#d6d3d1] rounded-[4px];
   }
 }
