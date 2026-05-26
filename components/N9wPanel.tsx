@@ -216,7 +216,7 @@ export const N9wPanel: React.FC = () => {
 
       logToSystem(`<b>Projektplan erstellt:</b><br>${plan.length} Dateien müssen bearbeitet werden. Compiler übernimmt...`, "info");
 
-      const newBatchFiles: BatchFile[] = [];
+      setBatchFiles([]);
 
       for (let i = 0; i < plan.length; i++) {
         const step = plan[i];
@@ -233,20 +233,22 @@ export const N9wPanel: React.FC = () => {
         let newCode = await callGeminiAPI(compilerPrompt, compilerSys);
         newCode = newCode.replace(/```typescript\n?/gi, "").replace(/```javascript\n?/gi, "").replace(/```tsx\n?/gi, "").replace(/```html\n?/gi, "").replace(/```\n?/g, "").trim();
 
-        const existingIdx = newBatchFiles.findIndex(f => f.path === step.path);
-        if (existingIdx >= 0) {
-            newBatchFiles[existingIdx].content = newCode;
-        } else {
-            newBatchFiles.push({ path: step.path, content: newCode });
-        }
+        setBatchFiles(prev => {
+          const idx = prev.findIndex(f => f.path === step.path);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = { ...next[idx], content: newCode };
+            return next;
+          }
+          return [...prev, { path: step.path, content: newCode }];
+        });
 
         setCurrentFileContent(newCode);
         setIsLoadingFile(false);
         logToSystem(`✅ <code>${step.path}</code> fertiggestellt.`, "success");
       }
 
-      setBatchFiles(newBatchFiles);
-      setCommitMsg(`Architect Deploy: Module Update (${newBatchFiles.length} files)`);
+      setCommitMsg(`Architect Deploy: Module Update (${plan.length} files)`);
       setActiveTab("chat");
       logToSystem(`🎉 <b>Projekt-Modul lokal generiert!</b><br>Gib oben deinen PAT ein und klicke auf 'API MASS PUSH', um das komplette Projekt live zu schalten.`, "success");
 
@@ -379,6 +381,7 @@ export const N9wPanel: React.FC = () => {
       suffix?: string;
       wrapContent?: (content: string) => string;
       useTreeContext?: boolean;
+      skipStrip?: boolean;
     } = {}
   ) => {
     if (!currentFileContent && !options.outputFilename && !options.useTreeContext) return;
@@ -396,7 +399,9 @@ export const N9wPanel: React.FC = () => {
       let response = await callGeminiAPI(prompt, sysPrompt);
 
       if (options.isCodeUpdate || options.newExtension || options.outputFilename) {
-        response = response.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
+        if (!options.skipStrip) {
+          response = response.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
+        }
 
         if (options.wrapContent) {
           response = options.wrapContent(response);
@@ -655,14 +660,14 @@ export const N9wPanel: React.FC = () => {
                   <button aria-label="Refactor code" onClick={() => handleAIAction("Refactor", "Du bist ein Clean Code Experte. Refaktorisiere den Code. Optimiere die Performance, verbessere die Lesbarkeit und wende moderne Best Practices (z.B. ES6+, SOLID) an. Verändere nicht die Kernlogik. Gib NUR den vollständigen, optimierten Code zurück (kein Markdown drumherum, nur Raw Code).", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Refactor</button>
                   <button aria-label="Auto-fix code" onClick={() => handleAIAction("Auto-Fix", "Du bist ein meisterhafter Debugger. Finde Syntax-Fehler, logische Lücken oder veraltete API-Aufrufe im Code und BEHEBE sie. Verändere nicht die Kern-Architektur, mache den Code nur lauffähig und fehlerfrei. Gib NUR den reparierten Code zurück, absolut kein Markdown, keine Erklärungen.", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 font-bold shadow-sm transition-all">✨ Auto-Fix</button>
                   <button aria-label="Big-O complexity analysis" onClick={() => handleAIAction("Big-O", "Du bist ein Informatik-Professor. Analysiere die Zeitkomplexität (Time Complexity) und Platzkomplexität (Space Complexity) im Big-O Format für die Hauptfunktionen im folgenden Code. Gib an, wo der Flaschenhals liegt und wie man ihn optimieren könnte. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 font-bold shadow-sm transition-all">✨ Big-O</button>
-                  <button aria-label="Generate Mermaid diagram" onClick={() => handleAIAction("Diagram", "Du bist ein Software-Architekt. Erstelle ein Mermaid.js Diagramm (z.B. Flowchart oder Class Diagram), das den Ablauf and die Struktur des folgenden Codes visuell darstellt. Gib NUR den Mermaid-Code zurück, eingebettet in einem Markdown-Block: ```mermaid\n[DEIN CODE]\n```", { newExtension: "md", suffix: "-diagram", wrapContent: (content) => `# Architektur: ${currentFile}\n\n${content}\n` })} className="shrink-0 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-200 font-bold shadow-sm transition-all">✨ Diagram</button>
+                  <button aria-label="Generate Mermaid diagram" onClick={() => handleAIAction("Diagram", "Du bist ein Software-Architekt. Erstelle ein Mermaid.js Diagramm (z.B. Flowchart oder Class Diagram), das den Ablauf and die Struktur des folgenden Codes visuell darstellt. Gib NUR den Mermaid-Code zurück, eingebettet in einem Markdown-Block: ```mermaid\n[DEIN CODE]\n```", { newExtension: "md", suffix: "-diagram", skipStrip: true, wrapContent: (content) => `# Architektur: ${currentFile}\n\n${content}\n` })} className="shrink-0 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-200 font-bold shadow-sm transition-all">✨ Diagram</button>
                   <button aria-label="Security scan" onClick={() => handleAIAction("Security", "Du bist ein erfahrener White-Hat Hacker und Cyber-Security Experte. Analysiere den folgenden Code auf gängige Schwachstellen (z.B. OWASP Top 10, Injection, XSS, ungesicherte APIs, Secrets im Code). Gib konkrete Warnungen und Lösungsvorschläge. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul class='list-disc pl-4'>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 font-bold shadow-sm transition-all">✨ Security</button>
                   <button aria-label="Generate mock data" onClick={() => handleAIAction("Mock Data", "Du bist ein Backend-Entwickler. Analysiere den Code (Modelle, Interfaces, Variablen oder UI-Komponenten) und generiere dazu passende, extrem realistische Mock-Daten als JSON-Array mit 5 detaillierten Objekten. Gib AUSSCHLIESSLICH das nackte JSON zurück, ohne Markdown-Fences drumherum.", { newExtension: "json", suffix: "_mock" })} className="shrink-0 text-[10px] bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200 font-bold shadow-sm transition-all">✨ Mock Data</button>
                   <button aria-label="Accessibility audit" onClick={() => handleAIAction("A11y", "Du bist ein Experte für Web Accessibility (WCAG). Analysiere den folgenden Code (insbesondere HTML, JSX, TSX) auf Barrierefreiheit. Prüfe auf fehlende ARIA-Labels, schlechte Kontraste, Tastaturnavigation und Alt-Texte. Gib konkrete Verbesserungsvorschläge. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul class='list-disc pl-4'>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-teal-100 text-teal-700 px-2 py-1 rounded hover:bg-teal-200 font-bold shadow-sm transition-all">✨ A11y</button>
                   <button aria-label="Extract i18n texts" onClick={() => handleAIAction("i18n", "Du bist ein Frontend-Architekt. Analysiere den Code und extrahiere alle hartcodierten, nutzersichtbaren Texte (Strings). Generiere eine JSON-Datei mit Key-Value-Paaren (Keys in UPPER_SNAKE_CASE, Values sind die Originaltexte). Gib AUSSCHLIESSLICH das validierte JSON zurück, absolut kein Markdown drumherum.", { newExtension: "json", suffix: "_i18n" })} className="shrink-0 text-[10px] bg-yellow-100 text-yellow-700 px-2 py-1 rounded hover:bg-yellow-200 font-bold shadow-sm transition-all">✨ i18n</button>
                   <button aria-label="Generate cURL API tests" onClick={() => handleAIAction("cURL API", "Du bist ein API-Spezialist. Analysiere diesen Code auf API-Endpunkte (z.B. REST-Routen, Controller, Fetch-Aufrufe). Generiere ein strukturiertes Markdown-Dokument mit realistischen, kopierbaren `curl`-Befehlen zum Testen dieser Endpunkte (inklusive nötiger JSON-Bodys und Headers). Gib NUR Markdown zurück, ohne Fences drumherum.", { newExtension: "md", suffix: "_endpoints" })} className="shrink-0 text-[10px] bg-cyan-100 text-cyan-700 px-2 py-1 rounded hover:bg-cyan-200 font-bold shadow-sm transition-all">✨ cURL API</button>
                   <button aria-label="Convert styles to Tailwind" onClick={() => handleAIAction("Tailwind", "Du bist ein Frontend UI/UX Experte. Konvertiere das Styling dieses Codes (z.B. standard CSS, Inline-Styles, alte Frameworks) in moderne Tailwind CSS Utility-Klassen. Ändere nicht die Kernlogik, überarbeite nur die Klassen/Styles. Gib NUR den vollständigen, umgeschriebenen Code zurück (kein Markdown drumherum).", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-sky-100 text-sky-700 px-2 py-1 rounded hover:bg-sky-200 font-bold shadow-sm transition-all">✨ Tailwind</button>
-                  <button aria-label="Dockerize project" onClick={() => handleAIAction("Dockerize", "Du bist ein DevOps Engineer. Analysiere die Dateipfade des Repositories and den Code der aktuell geöffneten Datei, um den Tech-Stack zu erraten. Generiere ein professionelles, multi-stage, produktionsbereites 'Dockerfile'. Gib AUSSCHLIESSLICH den Inhalt des Dockerfiles zurück, ohne Markdown-Fences drumherum.", { outputFilename: "Dockerfile", useTreeContext: true })} className="shrink-0 text-[10px] bg-slate-100 text-slate-700 px-2 py-1 rounded hover:bg-slate-200 font-bold shadow-sm transition-all">✨ Dockerize</button>
+                  <button aria-label="Dockerize project" onClick={() => handleAIAction("Dockerize", "Du bist ein DevOps Engineer. Analysiere die Dateipfade des Repositories und den Code der aktuell geöffneten Datei, um den Tech-Stack zu erraten. Generiere ein professionelles, multi-stage, produktionsbereites 'Dockerfile'. Gib AUSSCHLIESSLICH den Inhalt des Dockerfiles zurück, ohne Markdown-Fences drumherum.", { outputFilename: "Dockerfile", useTreeContext: true })} className="shrink-0 text-[10px] bg-slate-100 text-slate-700 px-2 py-1 rounded hover:bg-slate-200 font-bold shadow-sm transition-all">✨ Dockerize</button>
                   <button aria-label="SEO audit" onClick={() => handleAIAction("SEO Audit", "Du bist ein SEO-Experte. Analysiere diesen Code (HTML, JSX, TSX, etc.) auf SEO-Best-Practices. Prüfe auf fehlende Meta-Tags, Title-Tags, semantisches HTML (h1-h6), Alt-Attribute und Open Graph Daten. Zeige auf, was gut ist und was fehlt. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul class='list-disc pl-4'>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-fuchsia-100 text-fuchsia-700 px-2 py-1 rounded hover:bg-fuchsia-200 font-bold shadow-sm transition-all">✨ SEO Audit</button>
                   <button aria-label="Generate SQL schema" onClick={() => handleAIAction("SQL Schema", "Du bist ein Database Administrator. Analysiere den Code (Interfaces, Klassen, Structs, ORM-Modelle, JSON-Daten) und generiere das entsprechende SQL-Schema (PostgreSQL) mit CREATE TABLE Statements, korrekten Datentypen, Primary Keys und Foreign Keys. Gib AUSSCHLIESSLICH den rohen SQL-Code zurück, ohne Markdown-Fences drumherum.", { newExtension: "sql", suffix: "_schema" })} className="shrink-0 text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded hover:bg-amber-200 font-bold shadow-sm transition-all">✨ SQL Schema</button>
                   <button aria-label="Generate TypeScript types" onClick={() => handleAIAction("TS Types", "Du bist ein TypeScript-Experte. Analysiere das übergebene JSON, JavaScript oder die ungetypten Strukturen und generiere strikte, professionell benannte TypeScript Interfaces und Types dafür. Gib AUSSCHLIESSLICH den rohen TypeScript-Code zurück, ohne Markdown-Fences drumherum.", { newExtension: "ts", suffix: "_types" })} className="shrink-0 text-[10px] bg-lime-100 text-lime-700 px-2 py-1 rounded hover:bg-lime-200 font-bold shadow-sm transition-all">✨ TS Types</button>
