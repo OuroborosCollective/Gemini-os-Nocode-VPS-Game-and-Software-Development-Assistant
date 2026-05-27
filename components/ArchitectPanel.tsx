@@ -88,6 +88,7 @@ export const ArchitectPanel: React.FC = () => {
   const [architectInput, setArchitectInput] = useState("");
   const [chatInput, setChatInput] = useState("");
   const [commitMsg, setCommitMsg] = useState("");
+  const [batchStatusMessage, setBatchStatusMessage] = useState("");
   const [isRouting, setIsRouting] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isLoadingFile, setIsLoadingFile] = useState(false);
@@ -201,6 +202,7 @@ export const ArchitectPanel: React.FC = () => {
   const runArchitect = async () => {
     if (!architectInput.trim()) return;
     setIsRouting(true);
+    setBatchStatusMessage("");
     logToSystem("<b>Architekt analysiert Blueprint...</b><br>Erstelle Projektplan.", "info");
     setActiveTab("chat");
 
@@ -218,12 +220,13 @@ export const ArchitectPanel: React.FC = () => {
 
       logToSystem(`<b>Projektplan erstellt:</b><br>${plan.length} Dateien müssen bearbeitet werden. Compiler übernimmt...`, "info");
 
-      const newBatchFiles: BatchFile[] = [];
+      setBatchFiles([]);
 
       for (let i = 0; i < plan.length; i++) {
         const step = plan[i];
         logToSystem(`⏳ Bearbeite: <code>${step.path}</code>...`, "info");
         setCurrentFile(step.path);
+        setCurrentFileContent("");
         setIsLoadingFile(true);
         setActiveTab("editor");
 
@@ -235,20 +238,22 @@ export const ArchitectPanel: React.FC = () => {
         let newCode = await callGeminiAPI(compilerPrompt, compilerSys);
         newCode = newCode.replace(/```typescript\n?/gi, "").replace(/```javascript\n?/gi, "").replace(/```tsx\n?/gi, "").replace(/```html\n?/gi, "").replace(/```\n?/g, "").trim();
 
-        const existingIdx = newBatchFiles.findIndex(f => f.path === step.path);
-        if (existingIdx >= 0) {
-            newBatchFiles[existingIdx].content = newCode;
-        } else {
-            newBatchFiles.push({ path: step.path, content: newCode });
-        }
+        setBatchFiles(prev => {
+          const idx = prev.findIndex(f => f.path === step.path);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = { ...next[idx], content: newCode };
+            return next;
+          }
+          return [...prev, { path: step.path, content: newCode }];
+        });
 
         setCurrentFileContent(newCode);
         setIsLoadingFile(false);
         logToSystem(`✅ <code>${step.path}</code> fertiggestellt.`, "success");
       }
 
-      setBatchFiles(newBatchFiles);
-      setCommitMsg(`Architect Deploy: Module Update (${newBatchFiles.length} files)`);
+      setCommitMsg(`Architect Deploy: Module Update (${plan.length} files)`);
       setActiveTab("chat");
       logToSystem(`🎉 <b>Projekt-Modul lokal generiert!</b><br>Gib oben deinen PAT ein und klicke auf 'API MASS PUSH', um das komplette Projekt live zu schalten.`, "success");
 
@@ -345,6 +350,7 @@ export const ArchitectPanel: React.FC = () => {
       logToSystem(`🟢 <b>GITOPS SUCCESS!</b><br>Alle ${batchFiles.length} Dateien wurden in einem einzigen Commit gepusht!`, "success");
       setBatchFiles([]);
       setCommitMsg("");
+      setBatchStatusMessage("Commit erfolgreich hochgeladen!");
       fetchRepoTree();
 
     } catch (err: any) {
@@ -685,8 +691,8 @@ export const ArchitectPanel: React.FC = () => {
           <div className="flex-1 bg-stone-100/30 p-2 lg:p-4 overflow-hidden flex flex-col">
             <div className="architect-editor-bg flex-1 rounded-xl shadow-inner relative overflow-hidden flex flex-col">
               <div className="flex-1 overflow-auto p-3 text-[12px] text-stone-300 whitespace-pre custom-scrollbar">
-                {isLoadingFile ? (
-                  <div className="text-stone-500 italic">Lade {currentFile}...</div>
+                {isLoadingFile && !currentFileContent ? (
+                  <div className="text-stone-500 italic">Generiere Code für {currentFile}...</div>
                 ) : currentFileContent ? (
                   currentFileContent.split("\n").map((line, idx) => {
                     const lastLog = logs[logs.length - 1]?.text || "";
@@ -711,7 +717,9 @@ export const ArchitectPanel: React.FC = () => {
           <div className="h-16 border-t border-purple-200 px-4 flex items-center justify-between bg-purple-50 shrink-0 gap-4">
             <div className="truncate flex-1">
               <h4 className="text-[10px] font-black text-purple-700 uppercase">GitOps Warteschlange</h4>
-              <p className="text-[10px] text-purple-600 italic truncate mb-1">{batchFiles.length} Dateien bereit für Massen-Commit.</p>
+              <p className="text-[10px] text-purple-600 italic truncate mb-1">
+                {batchStatusMessage || `${batchFiles.length} Dateien bereit für Massen-Commit.`}
+              </p>
               <div className="flex gap-2 items-center">
                 <input
                   type="text"
