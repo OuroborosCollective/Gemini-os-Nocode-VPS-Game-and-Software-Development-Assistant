@@ -18,6 +18,7 @@ interface BatchFile {
 interface LogEntry {
   text: string;
   type: "info" | "error" | "success" | "warning";
+  role?: "user" | "bot" | "system";
 }
 
 interface ArchitectPlanItem {
@@ -89,8 +90,10 @@ export const ArchitectPanel: React.FC = () => {
   const [chatInput, setChatInput] = useState("");
   const [commitMsg, setCommitMsg] = useState("");
   const [isRouting, setIsRouting] = useState(false);
+  const [isExpanding, setIsExpanding] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isLoadingFile, setIsLoadingFile] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("Lade Datei...");
   const [isGeneratingCommitMsg, setIsGeneratingCommitMsg] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -110,8 +113,8 @@ export const ArchitectPanel: React.FC = () => {
       .replace(/on\w+='[^']*'/gim, "");
   };
 
-  const logToSystem = (text: string, type: LogEntry["type"] = "info") => {
-    setLogs(prev => [...prev, { text: sanitizeHtml(text), type }]);
+  const logToSystem = (text: string, type: LogEntry["type"] = "info", role: LogEntry["role"] = "system") => {
+    setLogs(prev => [...prev, { text: sanitizeHtml(text), type, role }]);
     if (type === "error" && window.innerWidth < 1024) {
       setActiveTab("chat");
     }
@@ -184,6 +187,7 @@ export const ArchitectPanel: React.FC = () => {
 
   const handleSelectFile = async (path: string) => {
     setCurrentFile(path);
+    setLoadingMessage(`Lade ${path}...`);
     setIsLoadingFile(true);
     setActiveTab("editor");
 
@@ -218,12 +222,13 @@ export const ArchitectPanel: React.FC = () => {
 
       logToSystem(`<b>Projektplan erstellt:</b><br>${plan.length} Dateien müssen bearbeitet werden. Compiler übernimmt...`, "info");
 
-      const newBatchFiles: BatchFile[] = [];
+      setBatchFiles([]); // Clear batch files at start of new generation cycle
 
       for (let i = 0; i < plan.length; i++) {
         const step = plan[i];
         logToSystem(`⏳ Bearbeite: <code>${step.path}</code>...`, "info");
         setCurrentFile(step.path);
+        setLoadingMessage(`Generiere Code für ${step.path}...`);
         setIsLoadingFile(true);
         setActiveTab("editor");
 
@@ -235,20 +240,22 @@ export const ArchitectPanel: React.FC = () => {
         let newCode = await callGeminiAPI(compilerPrompt, compilerSys);
         newCode = newCode.replace(/```typescript\n?/gi, "").replace(/```javascript\n?/gi, "").replace(/```tsx\n?/gi, "").replace(/```html\n?/gi, "").replace(/```\n?/g, "").trim();
 
-        const existingIdx = newBatchFiles.findIndex(f => f.path === step.path);
-        if (existingIdx >= 0) {
-            newBatchFiles[existingIdx].content = newCode;
-        } else {
-            newBatchFiles.push({ path: step.path, content: newCode });
-        }
+        setBatchFiles(prev => {
+          const idx = prev.findIndex(f => f.path === step.path);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = { ...next[idx], content: newCode };
+            return next;
+          }
+          return [...prev, { path: step.path, content: newCode }];
+        });
 
         setCurrentFileContent(newCode);
         setIsLoadingFile(false);
         logToSystem(`✅ <code>${step.path}</code> fertiggestellt.`, "success");
       }
 
-      setBatchFiles(newBatchFiles);
-      setCommitMsg(`Architect Deploy: Module Update (${newBatchFiles.length} files)`);
+      setCommitMsg(`Architect Deploy: Module Update (${plan.length} files)`);
       setActiveTab("chat");
       logToSystem(`🎉 <b>Projekt-Modul lokal generiert!</b><br>Gib oben deinen PAT ein und klicke auf 'API MASS PUSH', um das komplette Projekt live zu schalten.`, "success");
 
@@ -359,6 +366,7 @@ export const ArchitectPanel: React.FC = () => {
       logToSystem("Bitte gib zuerst ein grobes Stichwort oder eine Idee ein.", "error");
       return;
     }
+    setIsExpanding(true);
     logToSystem("✨ <b>Erweitere Blueprint Idee...</b>", "info");
     try {
       const sysPrompt = "Du bist ein erfahrener Software Architekt. Der User gibt dir eine kurze, rudimentäre Idee. Erweitere diese in eine detaillierte technische Spezifikation in wenigen Sätzen, die exakt beschreibt, welche Features, UI-Elemente und Logik-Komponenten gebaut werden sollen. Halte es präzise und fokussiert, optimal als Prompt für einen nachgelagerten Code-Agenten. Keine Begrüßungen.";
@@ -367,6 +375,8 @@ export const ArchitectPanel: React.FC = () => {
       logToSystem("✨ Blueprint erfolgreich detailliert.", "success");
     } catch (e: any) {
       logToSystem("Fehler beim Erweitern: " + e.message, "error");
+    } finally {
+      setIsExpanding(false);
     }
   };
 
@@ -381,6 +391,7 @@ export const ArchitectPanel: React.FC = () => {
       suffix?: string;
       wrapContent?: (content: string) => string;
       useTreeContext?: boolean;
+      skipStrip?: boolean;
     } = {}
   ) => {
     if (!currentFileContent && !options.outputFilename && !options.useTreeContext) return;
@@ -398,7 +409,9 @@ export const ArchitectPanel: React.FC = () => {
       let response = await callGeminiAPI(prompt, sysPrompt);
 
       if (options.isCodeUpdate || options.newExtension || options.outputFilename) {
-        response = response.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
+        if (!options.skipStrip) {
+          response = response.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
+        }
 
         if (options.wrapContent) {
           response = options.wrapContent(response);
@@ -435,7 +448,7 @@ export const ArchitectPanel: React.FC = () => {
         setActiveTab("editor");
         logToSystem(`✨ ${action} abgeschlossen und zur Queue hinzugefügt: <code>${targetFile}</code>`, "success");
       } else {
-        logToSystem(`<div class="text-[11px]"><b>${action}: <code>${currentFile}</code></b><br><br>${response}</div>`, "success");
+        logToSystem(`<div class="text-[11px]"><b>${action}: <code>${currentFile}</code></b><br><br>${response}</div>`, "success", "bot");
       }
     } catch (e: any) {
       logToSystem(`Fehler bei ${action}: ` + e.message, "error");
@@ -451,7 +464,7 @@ export const ArchitectPanel: React.FC = () => {
       const scriptSys = "Du bist ein KI-Assistent. Antworte nur mit dem vorzulesenden Text, ohne Markdown.";
       const spokenText = await callGeminiAPI(textPrompt + `\n\nCode:\n${currentFileContent.substring(0, 2000)}`, scriptSys);
 
-      logToSystem(`<i>🎙️ " ${spokenText} "</i>`, "info");
+      logToSystem(`<i>🎙️ " ${spokenText} "</i>`, "info", "bot");
 
       // 2. Call the Gemini TTS API
       const keyToUse = geminiApiKey || envApiKey;
@@ -510,7 +523,7 @@ export const ArchitectPanel: React.FC = () => {
     if (!chatInput.trim()) return;
     const userText = chatInput;
     setChatInput("");
-    setLogs(prev => [...prev, { text: `<b>Du:</b><br>${userText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}`, type: "info" }]);
+    setLogs(prev => [...prev, { text: `<b>Du:</b><br>${userText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}`, type: "info", role: "user" }]);
 
     try {
       const sysPrompt = "Du bist der Ouroboros Architect, ein hochintelligenter KI-Pair-Programmer. Antworte präzise, hilfsbereit und fokussiert auf Fragen des Entwicklers. Formatiere deine Antwort in einfachem HTML (nutze <b>, <i>, <code>, <ul>, <br>). Verwende KEIN Markdown, nur echtes HTML.";
@@ -519,7 +532,7 @@ export const ArchitectPanel: React.FC = () => {
         context = `[Kontext - Aktuell geöffnete Datei: ${currentFile}]\nCode Ausschnitt:\n${currentFileContent.substring(0, 1000)}\n\n`;
       }
       const response = await callGeminiAPI(context + "User Frage: " + userText, sysPrompt);
-      setLogs(prev => [...prev, { text: sanitizeHtml(`<b>✨ Architect:</b><br><div class="mt-1">${response}</div>`), type: "info" }]);
+      setLogs(prev => [...prev, { text: sanitizeHtml(`<b>✨ Architect:</b><br><div class="mt-1">${response}</div>`), type: "info", role: "bot" }]);
     } catch (e: any) {
       logToSystem("Chat API Fehler: " + e.message, "error");
     }
@@ -606,7 +619,9 @@ export const ArchitectPanel: React.FC = () => {
           <div className="p-3 bg-purple-50 border-b border-purple-200 shrink-0">
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-[11px] font-bold text-purple-800">⚡ ARCHITECT BLUEPRINT</h3>
-              <button onClick={handleExpandBlueprint} className="text-[9px] font-bold bg-purple-200 text-purple-800 px-2 py-0.5 rounded hover:bg-purple-300 transition-colors shadow-sm">✨ Expand Idea</button>
+              <button onClick={handleExpandBlueprint} disabled={isExpanding} className="text-[9px] font-bold bg-purple-200 text-purple-800 px-2 py-0.5 rounded hover:bg-purple-300 transition-colors shadow-sm disabled:opacity-50">
+                {isExpanding ? "⏳..." : "✨ Expand Idea"}
+              </button>
             </div>
             <textarea
               value={architectInput}
@@ -659,7 +674,7 @@ export const ArchitectPanel: React.FC = () => {
                   <button aria-label="Refactor code" onClick={() => handleAIAction("Refactor", "Du bist ein Clean Code Experte. Refaktorisiere den Code. Optimiere die Performance, verbessere die Lesbarkeit und wende moderne Best Practices (z.B. ES6+, SOLID) an. Verändere nicht die Kernlogik. Gib NUR den vollständigen, optimierten Code zurück (kein Markdown drumherum, nur Raw Code).", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Refactor</button>
                   <button aria-label="Auto-fix code" onClick={() => handleAIAction("Auto-Fix", "Du bist ein meisterhafter Debugger. Finde Syntax-Fehler, logische Lücken oder veraltete API-Aufrufe im Code und BEHEBE sie. Verändere nicht die Kern-Architektur, mache den Code nur lauffähig und fehlerfrei. Gib NUR den reparierten Code zurück, absolut kein Markdown, keine Erklärungen.", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 font-bold shadow-sm transition-all">✨ Auto-Fix</button>
                   <button aria-label="Big-O complexity analysis" onClick={() => handleAIAction("Big-O", "Du bist ein Informatik-Professor. Analysiere die Zeitkomplexität (Time Complexity) und Platzkomplexität (Space Complexity) im Big-O Format für die Hauptfunktionen im folgenden Code. Gib an, wo der Flaschenhals liegt und wie man ihn optimieren könnte. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 font-bold shadow-sm transition-all">✨ Big-O</button>
-                  <button aria-label="Generate Mermaid diagram" onClick={() => handleAIAction("Diagram", "Du bist ein Software-Architekt. Erstelle ein Mermaid.js Diagramm (z.B. Flowchart oder Class Diagram), das den Ablauf und die Struktur des folgenden Codes visuell darstellt. Gib NUR den Mermaid-Code zurück, eingebettet in einem Markdown-Block: ```mermaid\n[DEIN CODE]\n```", { newExtension: "md", suffix: "-diagram", wrapContent: (content) => `# Architektur: ${currentFile}\n\n${content}\n` })} className="shrink-0 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-200 font-bold shadow-sm transition-all">✨ Diagram</button>
+                  <button aria-label="Generate Mermaid diagram" onClick={() => handleAIAction("Diagram", "Du bist ein Software-Architekt. Erstelle ein Mermaid.js Diagramm (z.B. Flowchart oder Class Diagram), das den Ablauf und die Struktur des folgenden Codes visuell darstellt. Gib NUR den Mermaid-Code zurück, eingebettet in einem Markdown-Block: ```mermaid\n[DEIN CODE]\n```", { newExtension: "md", suffix: "-diagram", skipStrip: true, wrapContent: (content) => `# Architektur: ${currentFile}\n\n${content}\n` })} className="shrink-0 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-200 font-bold shadow-sm transition-all">✨ Diagram</button>
                   <button aria-label="Security scan" onClick={() => handleAIAction("Security", "Du bist ein erfahrener White-Hat Hacker und Cyber-Security Experte. Analysiere den folgenden Code auf gängige Schwachstellen (z.B. OWASP Top 10, Injection, XSS, ungesicherte APIs, Secrets im Code). Gib konkrete Warnungen und Lösungsvorschläge. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul class='list-disc pl-4'>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 font-bold shadow-sm transition-all">✨ Security</button>
                   <button aria-label="Generate mock data" onClick={() => handleAIAction("Mock Data", "Du bist ein Backend-Entwickler. Analysiere den Code (Modelle, Interfaces, Variablen oder UI-Komponenten) and generiere dazu passende, extrem realistische Mock-Daten als JSON-Array mit 5 detaillierten Objekten. Gib AUSSCHLIESSLICH das nackte JSON zurück, ohne Markdown-Fences drumherum.", { newExtension: "json", suffix: "_mock" })} className="shrink-0 text-[10px] bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200 font-bold shadow-sm transition-all">✨ Mock Data</button>
                   <button aria-label="Accessibility audit" onClick={() => handleAIAction("A11y", "Du bist ein Experten für Web Accessibility (WCAG). Analysiere den folgenden Code (insbesondere HTML, JSX, TSX) auf Barrierefreiheit. Prüfe auf fehlende ARIA-Labels, schlechte Kontraste, Tastaturnavigation und Alt-Texte. Gib konkrete Verbesserungsvorschläge. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul class='list-disc pl-4'>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-teal-100 text-teal-700 px-2 py-1 rounded hover:bg-teal-200 font-bold shadow-sm transition-all">✨ A11y</button>
@@ -686,7 +701,7 @@ export const ArchitectPanel: React.FC = () => {
             <div className="architect-editor-bg flex-1 rounded-xl shadow-inner relative overflow-hidden flex flex-col">
               <div className="flex-1 overflow-auto p-3 text-[12px] text-stone-300 whitespace-pre custom-scrollbar">
                 {isLoadingFile ? (
-                  <div className="text-stone-500 italic">Lade {currentFile}...</div>
+                  <div className="text-stone-500 italic">{loadingMessage}</div>
                 ) : currentFileContent ? (
                   currentFileContent.split("\n").map((line, idx) => {
                     const lastLog = logs[logs.length - 1]?.text || "";
@@ -750,11 +765,14 @@ export const ArchitectPanel: React.FC = () => {
             {logs.map((log, idx) => (
               <div
                 key={idx}
-                className={`p-3 rounded-xl rounded-tl-none border leading-normal ${
+                className={`p-3 rounded-xl border leading-normal ${
+                  log.role === "user" ? "bg-purple-100 border-purple-200 text-purple-800 ml-8 rounded-tr-none" :
+                  log.role === "bot" ? "bg-stone-50 border-stone-200 text-stone-700 mr-8 rounded-tl-none" :
+                  "bg-stone-100 border-stone-200 text-stone-700 rounded-tl-none"
+                } ${
                   log.type === "error" ? "bg-red-50 border-red-200 text-red-800" :
                   log.type === "success" ? "bg-green-50 border-green-200 text-green-800" :
-                  log.type === "warning" ? "bg-orange-50 border-orange-200 text-orange-800" :
-                  "bg-stone-100 border-stone-200 text-stone-700"
+                  log.type === "warning" ? "bg-orange-50 border-orange-200 text-orange-800" : ""
                 }`}
                 dangerouslySetInnerHTML={{ __html: log.text }}
               />
