@@ -18,6 +18,7 @@ interface BatchFile {
 interface LogEntry {
   text: string;
   type: "info" | "error" | "success" | "warning";
+  role?: "user" | "bot" | "system";
 }
 
 interface ArchitectPlanItem {
@@ -88,6 +89,7 @@ export const ArchitectPanel: React.FC = () => {
   const [architectInput, setArchitectInput] = useState("");
   const [chatInput, setChatInput] = useState("");
   const [commitMsg, setCommitMsg] = useState("");
+  const [batchStatus, setBatchStatus] = useState("");
   const [isRouting, setIsRouting] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isLoadingFile, setIsLoadingFile] = useState(false);
@@ -110,8 +112,8 @@ export const ArchitectPanel: React.FC = () => {
       .replace(/on\w+='[^']*'/gim, "");
   };
 
-  const logToSystem = (text: string, type: LogEntry["type"] = "info") => {
-    setLogs(prev => [...prev, { text: sanitizeHtml(text), type }]);
+  const logToSystem = (text: string, type: LogEntry["type"] = "info", role: LogEntry["role"] = "system") => {
+    setLogs(prev => [...prev, { text: sanitizeHtml(text), type, role }]);
     if (type === "error" && window.innerWidth < 1024) {
       setActiveTab("chat");
     }
@@ -201,6 +203,7 @@ export const ArchitectPanel: React.FC = () => {
   const runArchitect = async () => {
     if (!architectInput.trim()) return;
     setIsRouting(true);
+    setBatchStatus("");
     logToSystem("<b>Architekt analysiert Blueprint...</b><br>Erstelle Projektplan.", "info");
     setActiveTab("chat");
 
@@ -218,7 +221,7 @@ export const ArchitectPanel: React.FC = () => {
 
       logToSystem(`<b>Projektplan erstellt:</b><br>${plan.length} Dateien müssen bearbeitet werden. Compiler übernimmt...`, "info");
 
-      const newBatchFiles: BatchFile[] = [];
+      setBatchFiles([]);
 
       for (let i = 0; i < plan.length; i++) {
         const step = plan[i];
@@ -235,20 +238,22 @@ export const ArchitectPanel: React.FC = () => {
         let newCode = await callGeminiAPI(compilerPrompt, compilerSys);
         newCode = newCode.replace(/```typescript\n?/gi, "").replace(/```javascript\n?/gi, "").replace(/```tsx\n?/gi, "").replace(/```html\n?/gi, "").replace(/```\n?/g, "").trim();
 
-        const existingIdx = newBatchFiles.findIndex(f => f.path === step.path);
-        if (existingIdx >= 0) {
-            newBatchFiles[existingIdx].content = newCode;
-        } else {
-            newBatchFiles.push({ path: step.path, content: newCode });
-        }
+        setBatchFiles(prev => {
+          const idx = prev.findIndex(f => f.path === step.path);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = { ...next[idx], content: newCode };
+            return next;
+          }
+          return [...prev, { path: step.path, content: newCode }];
+        });
 
         setCurrentFileContent(newCode);
         setIsLoadingFile(false);
         logToSystem(`✅ <code>${step.path}</code> fertiggestellt.`, "success");
       }
 
-      setBatchFiles(newBatchFiles);
-      setCommitMsg(`Architect Deploy: Module Update (${newBatchFiles.length} files)`);
+      setCommitMsg(`Architect Deploy: Module Update (${plan.length} files)`);
       setActiveTab("chat");
       logToSystem(`🎉 <b>Projekt-Modul lokal generiert!</b><br>Gib oben deinen PAT ein und klicke auf 'API MASS PUSH', um das komplette Projekt live zu schalten.`, "success");
 
@@ -267,6 +272,7 @@ export const ArchitectPanel: React.FC = () => {
     if (batchFiles.length === 0) return;
 
     setIsPushing(true);
+    setBatchStatus("");
     logToSystem("🚀 <b>Starte sicheren Multi-File Commit...</b>", "info");
     setActiveTab("chat");
 
@@ -345,6 +351,7 @@ export const ArchitectPanel: React.FC = () => {
       logToSystem(`🟢 <b>GITOPS SUCCESS!</b><br>Alle ${batchFiles.length} Dateien wurden in einem einzigen Commit gepusht!`, "success");
       setBatchFiles([]);
       setCommitMsg("");
+      setBatchStatus("Commit erfolgreich hochgeladen!");
       fetchRepoTree();
 
     } catch (err: any) {
@@ -381,12 +388,14 @@ export const ArchitectPanel: React.FC = () => {
       suffix?: string;
       wrapContent?: (content: string) => string;
       useTreeContext?: boolean;
+      skipStrip?: boolean;
     } = {}
   ) => {
     if (!currentFileContent && !options.outputFilename && !options.useTreeContext) return;
     logToSystem(`✨ <b>Führe ${action} für ${currentFile}... durch</b>`, "info");
     if (!options.isCodeUpdate && !options.newExtension && !options.outputFilename) setActiveTab("chat");
 
+    setBatchStatus("");
     try {
       let context = "";
       if (options.useTreeContext) {
@@ -398,7 +407,9 @@ export const ArchitectPanel: React.FC = () => {
       let response = await callGeminiAPI(prompt, sysPrompt);
 
       if (options.isCodeUpdate || options.newExtension || options.outputFilename) {
-        response = response.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
+        if (!options.skipStrip) {
+          response = response.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
+        }
 
         if (options.wrapContent) {
           response = options.wrapContent(response);
@@ -510,7 +521,7 @@ export const ArchitectPanel: React.FC = () => {
     if (!chatInput.trim()) return;
     const userText = chatInput;
     setChatInput("");
-    setLogs(prev => [...prev, { text: `<b>Du:</b><br>${userText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}`, type: "info" }]);
+    setLogs(prev => [...prev, { text: `<b>Du:</b><br>${userText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}`, type: "info", role: "user" }]);
 
     try {
       const sysPrompt = "Du bist der Ouroboros Architect, ein hochintelligenter KI-Pair-Programmer. Antworte präzise, hilfsbereit und fokussiert auf Fragen des Entwicklers. Formatiere deine Antwort in einfachem HTML (nutze <b>, <i>, <code>, <ul>, <br>). Verwende KEIN Markdown, nur echtes HTML.";
@@ -519,7 +530,7 @@ export const ArchitectPanel: React.FC = () => {
         context = `[Kontext - Aktuell geöffnete Datei: ${currentFile}]\nCode Ausschnitt:\n${currentFileContent.substring(0, 1000)}\n\n`;
       }
       const response = await callGeminiAPI(context + "User Frage: " + userText, sysPrompt);
-      setLogs(prev => [...prev, { text: sanitizeHtml(`<b>✨ Architect:</b><br><div class="mt-1">${response}</div>`), type: "info" }]);
+      setLogs(prev => [...prev, { text: sanitizeHtml(`<b>✨ Architect:</b><br><div class="mt-1">${response}</div>`), type: "info", role: "bot" }]);
     } catch (e: any) {
       logToSystem("Chat API Fehler: " + e.message, "error");
     }
@@ -580,7 +591,7 @@ export const ArchitectPanel: React.FC = () => {
             type="password"
             value={ghPat}
             onChange={e => setGhPat(e.target.value)}
-            placeholder="GitHub PAT"
+            placeholder="GitHub PAT (repo scope!)"
             title="Braucht 'repo' Berechtigung für Private Repos"
             className="text-xs px-2 py-1 border border-stone-300 rounded w-40 focus:outline-none focus:border-purple-500"
           />
@@ -598,7 +609,7 @@ export const ArchitectPanel: React.FC = () => {
           <div className="p-3 bg-stone-100 border-b border-stone-200 text-[10px] font-bold uppercase text-stone-500 flex justify-between shrink-0">
             <span>📁 Projekt: {repoName}</span>
             <div className="flex gap-2">
-              <button onClick={() => handleAIAction("Auto-README", "Du bist ein technischer Projektmanager. Generiere basierend auf der Liste der Dateipfade eine professionelle, ausführliche 'README.md' für dieses Projekt auf Deutsch. Sie sollte Projekt-Titel, Beschreibung, angenommene Features, Installationshinweise und Struktur enthalten. Antworte NUR mit dem Inhalt der README.md Datei, ohne Markdown Code-Fences drumherum.", { outputFilename: "README.md", useTreeContext: true })} className="hover:text-purple-600 transition-colors">✨ Auto-README</button>
+              <button onClick={() => handleAIAction("Auto-README", "Du bist ein technischer Projektmanager. Generiere basierend auf der Liste der Dateipfade eine professionelle, ausführliche 'README.md' für dieses Projekt auf Deutsch. Sie sollte Projekt-Titel, Beschreibung, angenommene Features, Installationshinweise und Struktur enthalten. Antworte NUR mit dem Inhalt der README.md Datei, ohne Markdown Code-Fences drumherum.", { outputFilename: "README.md", useTreeContext: true, skipStrip: true })} className="hover:text-purple-600 transition-colors">✨ Auto-README</button>
               <button onClick={fetchRepoTree} className="hover:text-stone-800">🔄 Refresh</button>
             </div>
           </div>
@@ -659,19 +670,19 @@ export const ArchitectPanel: React.FC = () => {
                   <button aria-label="Refactor code" onClick={() => handleAIAction("Refactor", "Du bist ein Clean Code Experte. Refaktorisiere den Code. Optimiere die Performance, verbessere die Lesbarkeit und wende moderne Best Practices (z.B. ES6+, SOLID) an. Verändere nicht die Kernlogik. Gib NUR den vollständigen, optimierten Code zurück (kein Markdown drumherum, nur Raw Code).", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Refactor</button>
                   <button aria-label="Auto-fix code" onClick={() => handleAIAction("Auto-Fix", "Du bist ein meisterhafter Debugger. Finde Syntax-Fehler, logische Lücken oder veraltete API-Aufrufe im Code und BEHEBE sie. Verändere nicht die Kern-Architektur, mache den Code nur lauffähig und fehlerfrei. Gib NUR den reparierten Code zurück, absolut kein Markdown, keine Erklärungen.", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 font-bold shadow-sm transition-all">✨ Auto-Fix</button>
                   <button aria-label="Big-O complexity analysis" onClick={() => handleAIAction("Big-O", "Du bist ein Informatik-Professor. Analysiere die Zeitkomplexität (Time Complexity) und Platzkomplexität (Space Complexity) im Big-O Format für die Hauptfunktionen im folgenden Code. Gib an, wo der Flaschenhals liegt und wie man ihn optimieren könnte. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 font-bold shadow-sm transition-all">✨ Big-O</button>
-                  <button aria-label="Generate Mermaid diagram" onClick={() => handleAIAction("Diagram", "Du bist ein Software-Architekt. Erstelle ein Mermaid.js Diagramm (z.B. Flowchart oder Class Diagram), das den Ablauf und die Struktur des folgenden Codes visuell darstellt. Gib NUR den Mermaid-Code zurück, eingebettet in einem Markdown-Block: ```mermaid\n[DEIN CODE]\n```", { newExtension: "md", suffix: "-diagram", wrapContent: (content) => `# Architektur: ${currentFile}\n\n${content}\n` })} className="shrink-0 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-200 font-bold shadow-sm transition-all">✨ Diagram</button>
+                  <button aria-label="Generate Mermaid diagram" onClick={() => handleAIAction("Diagram", "Du bist ein Software-Architekt. Erstelle ein Mermaid.js Diagramm (z.B. Flowchart oder Class Diagram), das den Ablauf and die Struktur des folgenden Codes visuell darstellt. Gib NUR den Mermaid-Code zurück, eingebettet in einem Markdown-Block: ```mermaid\n[DEIN CODE]\n```", { newExtension: "md", suffix: "-diagram", skipStrip: true, wrapContent: (content) => `# Architektur: ${currentFile}\n\n${content}\n` })} className="shrink-0 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded hover:bg-emerald-200 font-bold shadow-sm transition-all">✨ Diagram</button>
                   <button aria-label="Security scan" onClick={() => handleAIAction("Security", "Du bist ein erfahrener White-Hat Hacker und Cyber-Security Experte. Analysiere den folgenden Code auf gängige Schwachstellen (z.B. OWASP Top 10, Injection, XSS, ungesicherte APIs, Secrets im Code). Gib konkrete Warnungen und Lösungsvorschläge. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul class='list-disc pl-4'>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-orange-100 text-orange-700 px-2 py-1 rounded hover:bg-orange-200 font-bold shadow-sm transition-all">✨ Security</button>
                   <button aria-label="Generate mock data" onClick={() => handleAIAction("Mock Data", "Du bist ein Backend-Entwickler. Analysiere den Code (Modelle, Interfaces, Variablen oder UI-Komponenten) and generiere dazu passende, extrem realistische Mock-Daten als JSON-Array mit 5 detaillierten Objekten. Gib AUSSCHLIESSLICH das nackte JSON zurück, ohne Markdown-Fences drumherum.", { newExtension: "json", suffix: "_mock" })} className="shrink-0 text-[10px] bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200 font-bold shadow-sm transition-all">✨ Mock Data</button>
                   <button aria-label="Accessibility audit" onClick={() => handleAIAction("A11y", "Du bist ein Experten für Web Accessibility (WCAG). Analysiere den folgenden Code (insbesondere HTML, JSX, TSX) auf Barrierefreiheit. Prüfe auf fehlende ARIA-Labels, schlechte Kontraste, Tastaturnavigation und Alt-Texte. Gib konkrete Verbesserungsvorschläge. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul class='list-disc pl-4'>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-teal-100 text-teal-700 px-2 py-1 rounded hover:bg-teal-200 font-bold shadow-sm transition-all">✨ A11y</button>
                   <button aria-label="Extract i18n texts" onClick={() => handleAIAction("i18n", "Du bist ein Frontend-Architekt. Analysiere den Code und extrahiere alle hartcodierten, nutzersichtbaren Texte (Strings). Generiere eine JSON-Datei mit Key-Value-Paaren (Keys in UPPER_SNAKE_CASE, Values sind die Originaltexte). Gib AUSSCHLIESSLICH das validierte JSON zurück, absolut kein Markdown drumherum.", { newExtension: "json", suffix: "_i18n" })} className="shrink-0 text-[10px] bg-yellow-100 text-yellow-700 px-2 py-1 rounded hover:bg-yellow-200 font-bold shadow-sm transition-all">✨ i18n</button>
-                  <button aria-label="Generate cURL API tests" onClick={() => handleAIAction("cURL API", "Du bist ein API-Spezialist. Analysiere diesen Code auf API-Endpunkte (z.B. REST-Routen, Controller, Fetch-Aufrufe). Generiere ein strukturiertes Markdown-Dokument mit realistischen, kopierbaren `curl`-Befehlen zum Testen dieser Endpunkte (inklusive nötiger JSON-Bodys und Headers). Gib NUR Markdown zurück, ohne Fences drumherum.", { newExtension: "md", suffix: "_endpoints" })} className="shrink-0 text-[10px] bg-cyan-100 text-cyan-700 px-2 py-1 rounded hover:bg-cyan-200 font-bold shadow-sm transition-all">✨ cURL API</button>
+                  <button aria-label="Generate cURL API tests" onClick={() => handleAIAction("cURL API", "Du bist ein API-Spezialist. Analysiere diesen Code auf API-Endpunkte (z.B. REST-Routen, Controller, Fetch-Aufrufe). Generiere ein strukturiertes Markdown-Dokument mit realistischen, kopierbaren `curl`-Befehlen zum Testen dieser Endpunkte (inklusive nötiger JSON-Bodys und Headers). Gib NUR Markdown zurück, ohne Fences drumherum.", { newExtension: "md", suffix: "_endpoints", skipStrip: true })} className="shrink-0 text-[10px] bg-cyan-100 text-cyan-700 px-2 py-1 rounded hover:bg-cyan-200 font-bold shadow-sm transition-all">✨ cURL API</button>
                   <button aria-label="Convert styles to Tailwind" onClick={() => handleAIAction("Tailwind", "Du bist ein Frontend UI/UX Experte. Konvertiere das Styling dieses Codes (z.B. standard CSS, Inline-Styles, alte Frameworks) in moderne Tailwind CSS Utility-Klassen. Ändere nicht die Kernlogik, überarbeite nur die Klassen/Styles. Gib NUR den vollständigen, umgeschriebenen Code zurück (kein Markdown drumherum).", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-sky-100 text-sky-700 px-2 py-1 rounded hover:bg-sky-200 font-bold shadow-sm transition-all">✨ Tailwind</button>
                   <button aria-label="Dockerize project" onClick={() => handleAIAction("Dockerize", "Du bist ein DevOps Engineer. Analysiere die Dateipfade des Repositories und den Code der aktuell geöffneten Datei, um den Tech-Stack zu erraten. Generiere ein professionelles, multi-stage, produktionsbereites 'Dockerfile'. Gib AUSSCHLIESSLICH den Inhalt des Dockerfiles zurück, ohne Markdown-Fences drumherum.", { outputFilename: "Dockerfile", useTreeContext: true })} className="shrink-0 text-[10px] bg-slate-100 text-slate-700 px-2 py-1 rounded hover:bg-slate-200 font-bold shadow-sm transition-all">✨ Dockerize</button>
                   <button aria-label="SEO audit" onClick={() => handleAIAction("SEO Audit", "Du bist ein SEO-Experte. Analysiere diesen Code (HTML, JSX, TSX, etc.) auf SEO-Best-Practices. Prüfe auf fehlende Meta-Tags, Title-Tags, semantisches HTML (h1-h6), Alt-Attribute und Open Graph Daten. Zeige auf, was gut ist und was fehlt. Antworte in kurzem, gut lesbarem HTML (nutze <b>, <code>, <ul class='list-disc pl-4'>, <li>). Kein Markdown.")} className="shrink-0 text-[10px] bg-fuchsia-100 text-fuchsia-700 px-2 py-1 rounded hover:bg-fuchsia-200 font-bold shadow-sm transition-all">✨ SEO Audit</button>
                   <button aria-label="Generate SQL schema" onClick={() => handleAIAction("SQL Schema", "Du bist ein Database Administrator. Analysiere den Code (Interfaces, Klassen, Structs, ORM-Modelle, JSON-Daten) und generiere das entsprechende SQL-Schema (PostgreSQL) mit CREATE TABLE Statements, korrekten Datentypen, Primary Keys und Foreign Keys. Gib AUSSCHLIESSLICH den rohen SQL-Code zurück, ohne Markdown-Fences drumherum.", { newExtension: "sql", suffix: "_schema" })} className="shrink-0 text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded hover:bg-amber-200 font-bold shadow-sm transition-all">✨ SQL Schema</button>
                   <button aria-label="Generate TypeScript types" onClick={() => handleAIAction("TS Types", "Du bist ein TypeScript-Experte. Analysiere das übergebene JSON, JavaScript oder die ungetypten Strukturen und generiere strikte, professionell benannte TypeScript Interfaces und Types dafür. Gib AUSSCHLIESSLICH den rohen TypeScript-Code zurück, ohne Markdown-Fences drumherum.", { newExtension: "ts", suffix: "_types" })} className="shrink-0 text-[10px] bg-lime-100 text-lime-700 px-2 py-1 rounded hover:bg-lime-200 font-bold shadow-sm transition-all">✨ TS Types</button>
                   <button aria-label="Generate CI/CD pipeline" onClick={() => handleAIAction("CI/CD", "Du bist ein DevOps Architekt. Analysiere den Dateibaum, um den Tech-Stack zu erkennen. Schreibe eine professionelle GitHub Actions CI/CD Pipeline (`main.yml`), die den Code auscheckt, Abhängigkeiten installiert, Tests ausführt und das Projekt baut. Gib AUSSCHLIESSLICH den rohen YAML-Code zurück, ohne Markdown-Fences.", { outputFilename: ".github/workflows/main.yml", useTreeContext: true })} className="shrink-0 text-[10px] bg-rose-100 text-rose-700 px-2 py-1 rounded hover:bg-rose-200 font-bold shadow-sm transition-all">✨ CI/CD</button>
-                  <button aria-label="Generate tutorial" onClick={() => handleAIAction("Tutorial", "Du bist ein Developer Advocate und Tech-Blogger. Schreibe ein gut strukturiertes Markdown-Tutorial (wie einen Medium- oder Dev.to-Artikel), das den übergebenen Code Schritt für Schritt erklärt. Gliedere in Einleitung, Code-Walkthrough und Fazit. Gib AUSSCHLIESSLICH Markdown-Text zurück, ohne umschließende Fences für die ganze Antwort.", { newExtension: "md", suffix: "_tutorial" })} className="shrink-0 text-[10px] bg-violet-100 text-violet-700 px-2 py-1 rounded hover:bg-violet-200 font-bold shadow-sm transition-all">✨ Tutorial</button>
+                  <button aria-label="Generate tutorial" onClick={() => handleAIAction("Tutorial", "Du bist ein Developer Advocate und Tech-Blogger. Schreibe ein gut strukturiertes Markdown-Tutorial (wie einen Medium- oder Dev.to-Artikel), das den übergebenen Code Schritt für Schritt erklärt. Gliedere in Einleitung, Code-Walkthrough und Fazit. Gib AUSSCHLIESSLICH Markdown-Text zurück, ohne umschließende Fences für die ganze Antwort.", { newExtension: "md", suffix: "_tutorial", skipStrip: true })} className="shrink-0 text-[10px] bg-violet-100 text-violet-700 px-2 py-1 rounded hover:bg-violet-200 font-bold shadow-sm transition-all">✨ Tutorial</button>
                   <button aria-label="Generate documentation" onClick={() => handleAIAction("Docs", "Du bist ein Senior Developer. Füge dem folgenden Code professionelle JSDoc/Docstrings und hilfreiche Inline-Kommentare hinzu. Verändere NICHTS an der Logik. Gib NUR den vollständigen, kommentierten Code zurück (kein Markdown, nur reiner Code).", { isCodeUpdate: true })} className="shrink-0 text-[10px] bg-stone-200 text-stone-700 px-2 py-1 rounded hover:bg-stone-300 font-bold shadow-sm transition-all">✨ Docs</button>
                   <button aria-label="Generate unit tests" onClick={() => {
                       const ext = currentFile.split('.').pop() || 'ts';
@@ -711,7 +722,7 @@ export const ArchitectPanel: React.FC = () => {
           <div className="h-16 border-t border-purple-200 px-4 flex items-center justify-between bg-purple-50 shrink-0 gap-4">
             <div className="truncate flex-1">
               <h4 className="text-[10px] font-black text-purple-700 uppercase">GitOps Warteschlange</h4>
-              <p className="text-[10px] text-purple-600 italic truncate mb-1">{batchFiles.length} Dateien bereit für Massen-Commit.</p>
+              <p className="text-[10px] text-purple-600 italic truncate mb-1">{batchStatus || `${batchFiles.length} Dateien bereit für Massen-Commit.`}</p>
               <div className="flex gap-2 items-center">
                 <input
                   type="text"
@@ -750,11 +761,13 @@ export const ArchitectPanel: React.FC = () => {
             {logs.map((log, idx) => (
               <div
                 key={idx}
-                className={`p-3 rounded-xl rounded-tl-none border leading-normal ${
-                  log.type === "error" ? "bg-red-50 border-red-200 text-red-800" :
-                  log.type === "success" ? "bg-green-50 border-green-200 text-green-800" :
-                  log.type === "warning" ? "bg-orange-50 border-orange-200 text-orange-800" :
-                  "bg-stone-100 border-stone-200 text-stone-700"
+                className={`p-3 rounded-xl border leading-normal mb-4 ${
+                  log.role === "user" ? "bg-purple-100 border-purple-200 text-purple-800 ml-8 rounded-tr-none" :
+                  log.role === "bot" ? "bg-stone-50 border-stone-200 text-stone-700 mr-8 rounded-tl-none" :
+                  log.type === "error" ? "bg-red-50 border-red-200 text-red-800 rounded-tl-none" :
+                  log.type === "success" ? "bg-green-50 border-green-200 text-green-800 rounded-tl-none" :
+                  log.type === "warning" ? "bg-orange-50 border-orange-200 text-orange-800 rounded-tl-none" :
+                  "bg-stone-100 border-stone-200 text-stone-700 rounded-tl-none"
                 }`}
                 dangerouslySetInnerHTML={{ __html: log.text }}
               />
